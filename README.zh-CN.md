@@ -1,0 +1,203 @@
+# RiskLens — AI 投资组合风险终端
+
+[English](README.md) · **简体中文**
+
+[在线演示](https://risklens-ai-portfolio-risk-terminal.tianlu923.chatgpt.site/) · [后端健康检查](https://balanced-intuition-production-6020.up.railway.app/health)
+
+RiskLens 是面向股票与 ETF 投资组合的全栈风险分析项目。用户输入股票代码和权重后，可以查看历史风险指标、运行明确标注为假设性的压力测试、比较受约束的优化权重，并通过按时间顺序滚动的样本外回测检验方法。项目用于量化金融学习与展示，**不是交易系统，也不提供个性化投资建议**。
+
+> **数值边界：** 所有金融指标和情景损益都由确定性的 Python 代码计算。默认的“AI 风险官”是免费的规则解释层；可选的服务端 LLM 只负责理解语言及解释已提供的结果，不会虚构或自行计算数值。
+
+## 功能概览
+
+| 模块 | 已实现功能 |
+| --- | --- |
+| 组合风险 | 几何年化收益、波动率、Sharpe 估计、历史单日 VaR/CVaR、回撤、相关性、Euler 波动率风险贡献、集中度和规则风险提示。 |
+| 压力测试 | 市场、科技、利率和单一股票冲击；简化的历史风格预设；资产及风险因子损益归因；明确披露久期与行业暴露的兜底假设。 |
+| 风险官 | 对有限范围的中英文情景表达进行解析，并基于计算结果解释风险；可选 OpenAI Structured Outputs 模式默认关闭。 |
+| 因子暴露 | 以 SPY 为市场代理的历史回归：beta、alpha、R²、残差波动率及 60 日滚动 beta；不伪造 SMB/HML。 |
+| 组合优化 | 仅做多的最小波动率、最大 Sharpe、风险平价，可设置单一持仓上限；不会自动改动用户组合。 |
+| 滚动回测 | 用过去数据拟合、在后续日期测试；模拟权重漂移、月度调仓、可配置交易成本，并与固定目标权重组合比较。 |
+
+默认组合：**AAPL 20% · MSFT 20% · NVDA 15% · SPY 25% · TLT 20%**。
+
+## 系统架构
+
+```mermaid
+flowchart TB
+    USER[用户：组合与问题] --> UI[React / TypeScript 仪表盘<br/>Vinext + Tailwind + Recharts]
+    UI -->|HTTPS 类型化 JSON| API[FastAPI + Pydantic]
+    API --> DATA[MarketDataProvider 数据接口]
+    DATA --> YF[Yahoo Finance 历史价格]
+    DATA --> ALIGN[交易日对齐 + 日收益率<br/>数据质量提示]
+    ALIGN --> RISK[风险指标 + SPY 因子回归]
+    ALIGN --> OPT[受约束组合优化]
+    ALIGN --> BACK[滚动样本外回测]
+    API --> STRESS[确定性压力测试引擎]
+    API -->|自然语言情景| PARSER[规则解析器或可选 LLM 解析器]
+    PARSER -->|经验证的结构化输入| STRESS
+    RISK --> RESULTS[Python 计算结果 + 数据来源]
+    OPT --> RESULTS
+    BACK --> RESULTS
+    STRESS --> RESULTS
+    RESULTS --> OFFICER[风险官：定性解释]
+    OFFICER -->|不独立计算金融数值| API
+    RESULTS --> API
+    API --> UI
+```
+
+自然语言压力测试的计算边界如下：
+
+```mermaid
+sequenceDiagram
+    participant User as 用户
+    participant Parser as 规则解析器 / 可选 LLM
+    participant Engine as Python 压力测试引擎
+    participant Officer as 风险官
+    User->>Parser: “科技股跌 15%，利率升 100 bps 会怎样？”
+    Parser->>Engine: 经验证的结构化情景
+    Engine-->>Officer: 确定性损益与模型假设
+    Officer-->>User: 基于计算证据的解释
+```
+
+### 滚动样本外回测
+
+```mermaid
+flowchart LR
+    TRAIN[此前 504 个日收益<br/>仅用于训练] --> FIT[求解受约束权重]
+    FIT --> TEST[随后 21 个日收益<br/>用于前向测试]
+    TEST --> RECORD[模拟权重漂移、调仓成本<br/>记录净值]
+    RECORD --> ROLL[向前滚动并重新拟合]
+    ROLL --> TRAIN
+```
+
+每一轮的训练期都在测试期**之前**结束，不会用该轮未来收益求权重。默认向 Yahoo Finance 请求约三年的历史数据：首个训练窗口为 504 个对齐的日收益（约两个交易年），此后约每 21 个交易日重新训练和测试。数据请求缓存 15 分钟；API 会返回实际对齐后的起止日期和观测数量。这里使用的是**历史日数据，不是交易所实时行情**。
+
+**示例结果，并非业绩承诺：** 使用截至 2026-10-14 可取得的数据，默认组合的最小波动率滚动测试覆盖 2025-10-10 至 2026-10-13（253 个前向交易日、13 个窗口）。在模型设定的 10 bps 交易成本下，优化策略的模拟累计收益为 **−0.94%**，固定原目标权重组合为 **+14.06%**。即使优化策略落后，也如实报告；结果会随数据、输入和假设而变化。
+
+## 主要量化定义
+
+设对齐后的资产日收益为 `r_t`，组合权重为 `w`，年化协方差为 `Sigma_ann = 252 × Cov(r)`：
+
+| 指标 | 定义 |
+| --- | --- |
+| 组合日收益 | `r_p,t = wᵀ r_t` |
+| 几何年化收益 | `R_ann = [逐日连乘 (1 + r_p,t)]^(252/T) − 1` |
+| 年化波动率 | `sigma_p = sqrt(wᵀ Sigma_ann w)` |
+| Sharpe 估计 | `(R_ann − R_f) / sigma_p` |
+| 历史 95% 单日 VaR / CVaR | 负的 5% 分位收益 / 该分位以下收益的负均值，界面按损失幅度展示。 |
+| 最大回撤 | `V_t / max(V_s，s ≤ t) − 1` 的最小值；初始净值也计入历史高点。 |
+| 波动率风险贡献比例 | `w_i (Sigma_ann w)_i / (wᵀ Sigma_ann w)`，比例之和约为 1。 |
+| 有效持仓数 | `1 / sum_i(w_i²)` |
+| 债券利率冲击 | 一阶近似 `ΔP/P ≈ −D × Δy`；兜底久期会明确标注。 |
+| 单边换手率 | `0.5 × sum_i(abs(w_i,new − w_i,pretrade))`；模型对其两倍的总交易名义金额收取成本。 |
+
+优化使用 SciPy SLSQP，并约束 `sum_i(w_i) = 1`、`w_i ≥ 0`，可选 `w_i ≤ w_max`。最大 Sharpe 使用与界面一致的几何收益估计；风险平价以风险贡献比例相等为目标。非线性目标从多个固定初值求解，**不保证全局最优**。
+
+## 代码结构
+
+```text
+backend/
+  app/api/             风险分析、压力测试、风险官、优化、回测 API
+  app/models/          Pydantic 输入输出模型
+  app/data/            可替换的 Yahoo Finance 数据接口
+  app/risk/            确定性风险、因子与压力测试模块
+  app/optimization/    优化器与滚动回测模拟
+  app/ai/              有边界的解析器与可选 LLM 适配器
+  tests/               合成数据单元测试与 API 测试
+frontend/
+  app/                 页面入口和主题
+  components/          仪表盘模块与通用 UI
+  lib/                 类型化 API 客户端与明确标注的演示快照
+docs/                   简历要点和项目论文
+docker-compose.yml
+```
+
+## 本地运行
+
+需要 Python 3.12+、Node.js 22.13+ 和 pnpm。在项目根目录分别打开两个终端。
+
+**终端 1 — FastAPI**
+
+```bash
+cd backend
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+cp .env.example .env
+uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload --env-file .env
+```
+
+**终端 2 — 前端**
+
+```bash
+cd frontend
+cp .env.example .env.development.local
+pnpm install
+pnpm dev
+```
+
+打开 `http://localhost:3000`。后端健康检查：`http://127.0.0.1:8000/health`；交互式 API 文档：`http://127.0.0.1:8000/docs`。本地前端指向 `http://localhost:8000`。默认的确定性模式**不需要 OpenAI API Key**。后端不可用时，预置分析会明确显示为合成数据演示快照。
+
+也可以在项目根目录运行 `docker compose up --build`；前端和 API 分别使用 3000、8000 端口。
+
+## API 与部署
+
+| 接口 | 用途 |
+| --- | --- |
+| `POST /portfolio/analyze` | 历史组合风险与数据质量。 |
+| `POST /portfolio/stress-test` | 假设性冲击与损益归因。 |
+| `POST /portfolio/optimize` | 样本内优化对比。 |
+| `POST /portfolio/backtest` | 按时间顺序的滚动回测。 |
+| `POST /ai/risk-officer` | 风险解释或情景翻译。 |
+| `GET /market/history/{ticker}` | 标准化价格历史。 |
+| `GET /health` | 服务状态与版本。 |
+
+`/portfolio/backtest` 请求示例：
+
+```json
+{
+  "positions": [
+    {"ticker": "AAPL", "weight": 0.20},
+    {"ticker": "MSFT", "weight": 0.20},
+    {"ticker": "NVDA", "weight": 0.15},
+    {"ticker": "SPY", "weight": 0.25},
+    {"ticker": "TLT", "weight": 0.20}
+  ],
+  "lookback_years": 3,
+  "risk_free_rate": 0.04,
+  "objective": "minimum_volatility",
+  "max_position_weight": null,
+  "training_days": 504,
+  "rebalance_days": 21,
+  "cost_bps": 10
+}
+```
+
+当前前端部署在 OpenAI Sites，FastAPI 后端部署在 Railway。换平台部署时，前端 `NEXT_PUBLIC_API_URL` 应填**公开的 HTTPS 后端地址**，不可填 localhost；后端 `CORS_ORIGINS` 应填准确的前端来源。若启用可选 LLM，`OPENAI_API_KEY` 只能配置在后端。本版本没有用户账户和云端保存组合。
+
+## 测试
+
+```bash
+cd backend
+.venv/bin/pytest -q
+.venv/bin/ruff check app tests
+
+cd ../frontend
+pnpm lint
+pnpm build
+```
+
+后端测试使用确定性的合成价格数据，不依赖 Yahoo Finance 或 LLM 账户。最近的 Phase 6 验证通过 **52 项后端测试**、前端 lint 和生产构建。上线后应单独验证真实行情数据链路。
+
+## 局限性与后续方向
+
+- 历史 VaR/CVaR、beta 和拟合权重描述的是选定样本，不能预测未来损失或收益。
+- 优化面板是样本内对比；独立的滚动回测面板只是按时间顺序进行的**假设性模拟**，并非实际成交记录。今天选定的股票可能带有事后选择偏差。
+- 模拟的收盘价执行与固定 bps 成本未覆盖买卖价差、滑点、市场冲击、税费及幸存者偏差修正。
+- 历史风格压力测试只是简化的线性冲击，不能精确重现真实事件。科技暴露和债券久期均为已披露的兜底假设，而非实时持仓数据或实时测量值。
+- 因子模型目前仅以 SPY 为市场代理；SMB、HML、动量等因子须接入可靠数据后才能展示。
+- Yahoo Finance 数据可能延迟、修订、缺失或暂时不可用；系统会对齐日期、给出警告，并在只能使用未调整收盘价时披露降级。
+- 后续研究可加入成交延迟与滑点敏感性、更可靠的因子数据，以及跨训练窗口和市场环境的稳健性检验。只有需要保存组合时才有必要增加持久化。
+
+**仅供教育和研究使用，不构成个性化投资建议。**

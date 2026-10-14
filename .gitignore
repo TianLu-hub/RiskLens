@@ -1,0 +1,36 @@
+# Python
+backend/.venv/
+**/__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.coverage
+.coverage*
+.Rhistory
+
+# JavaScript
+frontend/node_modules/
+frontend/.next/
+frontend/.vinext/
+frontend/dist/
+frontend/.wrangler/
+frontend/coverage/
+frontend/.vercel/
+
+# Environment and editor state
+.env
+.env.local
+**/.env
+**/.env.*.local
+frontend/.env.production
+frontend/.openai/hosting.json
+*.log
+.DS_Store
+
+# Local generated artifacts and scratch work
+tmp/
+output/
+outputs/
+work/
+frontend/outputs/
+frontend/work/

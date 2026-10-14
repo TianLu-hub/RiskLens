@@ -1,0 +1,5 @@
+node_modules
+.vinext
+dist
+.wrangler
+.env*
