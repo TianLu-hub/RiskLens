@@ -1,5 +1,7 @@
 # RiskLens — AI Portfolio Risk Terminal
 
+[![CI](https://github.com/TianLu-hub/RiskLens/actions/workflows/ci.yml/badge.svg)](https://github.com/TianLu-hub/RiskLens/actions/workflows/ci.yml)
+
 **English** · [简体中文](README.zh-CN.md)
 
 [Live dashboard](https://risklens-ai-portfolio-risk-terminal.tianlu923.chatgpt.site/) · [API health](https://balanced-intuition-production-6020.up.railway.app/health)

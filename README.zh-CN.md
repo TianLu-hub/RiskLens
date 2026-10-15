@@ -1,5 +1,7 @@
 # RiskLens — AI 投资组合风险终端
 
+[![CI](https://github.com/TianLu-hub/RiskLens/actions/workflows/ci.yml/badge.svg)](https://github.com/TianLu-hub/RiskLens/actions/workflows/ci.yml)
+
 [English](README.md) · **简体中文**
 
 [在线演示](https://risklens-ai-portfolio-risk-terminal.tianlu923.chatgpt.site/) · [后端健康检查](https://balanced-intuition-production-6020.up.railway.app/health)
