@@ -46,7 +46,7 @@ export function PortfolioEditor({
   }
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="flex h-full flex-col" aria-busy={isLoading}>
       <div className="border-b border-border p-4">
         <label className="section-label" htmlFor="portfolio-preset">Portfolio</label>
         <NativeSelect
@@ -54,6 +54,7 @@ export function PortfolioEditor({
           size="sm"
           id="portfolio-preset"
           value={preset}
+          disabled={isLoading}
           onChange={(event) => selectPreset(event.target.value as DemoPortfolioName)}
           aria-label="Select demo portfolio"
         >
@@ -69,6 +70,7 @@ export function PortfolioEditor({
           <div key={`${index}-${position.ticker}`} className="grid grid-cols-[1fr_72px_28px] items-center gap-2 border-b border-border px-3 py-2">
             <Input
               value={position.ticker}
+              disabled={isLoading}
               onChange={(event) => updatePosition(index, { ticker: event.target.value.toUpperCase() })}
               className="h-7 rounded-sm border-transparent bg-transparent px-1 font-mono text-xs font-semibold hover:border-input focus:border-ring"
               aria-label={`Ticker ${index + 1}`}
@@ -80,6 +82,7 @@ export function PortfolioEditor({
                 max="100"
                 step="0.1"
                 value={Number((position.weight * 100).toFixed(4))}
+                disabled={isLoading}
                 onChange={(event) => updatePosition(index, { weight: Math.max(0, Number(event.target.value) / 100) })}
                 className="h-7 rounded-sm pr-5 text-right font-mono text-xs"
                 aria-label={`${position.ticker || `Position ${index + 1}`} weight percent`}
@@ -90,7 +93,7 @@ export function PortfolioEditor({
               size="icon-xs"
               variant="ghost"
               aria-label={`Remove ${position.ticker || `position ${index + 1}`}`}
-              disabled={positions.length === 1}
+              disabled={isLoading || positions.length === 1}
               onClick={() => onChange(positions.filter((_, itemIndex) => itemIndex !== index))}
             ><Trash2 /></Button>
           </div>
@@ -103,9 +106,10 @@ export function PortfolioEditor({
             size="sm"
             variant="outline"
             className="rounded-sm"
+            disabled={isLoading}
             onClick={() => onChange([...positions, { ticker: '', weight: 0 }])}
           ><Plus /> Position</Button>
-          <Button size="sm" variant="outline" className="rounded-sm" onClick={normalize} disabled={total <= 0}><Scale /> Normalize</Button>
+          <Button size="sm" variant="outline" className="rounded-sm" onClick={normalize} disabled={isLoading || total <= 0}><Scale /> Normalize</Button>
         </div>
         <div className="mt-3 flex items-center justify-between text-[10px] uppercase tracking-wider text-muted-foreground">
           <span>Total weight</span>

@@ -174,6 +174,7 @@ export function RiskDashboard() {
             <NativeSelect
               size="sm"
               value={lookbackYears}
+              disabled={isLoading}
               onChange={(event) => setLookbackYears(Number(event.target.value))}
               aria-label="Lookback period"
             >
@@ -193,6 +194,7 @@ export function RiskDashboard() {
                 max="50"
                 step="0.1"
                 value={Number((riskFreeRate * 100).toFixed(2))}
+                disabled={isLoading}
                 onChange={(event) =>
                   setRiskFreeRate(Number(event.target.value) / 100)
                 }
