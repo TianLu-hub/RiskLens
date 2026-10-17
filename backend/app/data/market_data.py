@@ -70,7 +70,7 @@ class YahooFinanceProvider(MarketDataProvider):
         with self._lock:
             cached = self._cache.get(key)
             if cached and now - cached[0] < self.cache_ttl:
-                return cached[1]
+                return self._copy_history(cached[1])
 
         try:
             raw = yf.download(
@@ -133,8 +133,20 @@ class YahooFinanceProvider(MarketDataProvider):
             prices=prices.astype(float), source="Yahoo Finance", warnings=warnings
         )
         with self._lock:
-            self._cache[key] = (now, result)
-        return result
+            # DataFrames and lists remain mutable inside a frozen dataclass. Keep
+            # a private snapshot so a caller cannot corrupt subsequent analyses.
+            self._cache[key] = (datetime.now(UTC), self._copy_history(result))
+        return self._copy_history(result)
+
+    @staticmethod
+    def _copy_history(history: PriceHistory) -> PriceHistory:
+        """Return an isolated snapshot of mutable cached market-data fields."""
+
+        return PriceHistory(
+            prices=history.prices.copy(deep=True),
+            source=history.source,
+            warnings=list(history.warnings),
+        )
 
     @staticmethod
     def _extract_adjusted_close(raw: pd.DataFrame, tickers: list[str]) -> pd.DataFrame:

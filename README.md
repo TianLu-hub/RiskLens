@@ -190,7 +190,7 @@ pnpm lint
 pnpm build
 ```
 
-Tests use deterministic synthetic price fixtures, with no Yahoo Finance or LLM dependency. The latest Phase 6 run passed **52 backend tests**, frontend lint, and a production build. Verify live market access separately after deployment.
+Tests use deterministic synthetic price fixtures, with no Yahoo Finance or LLM dependency. The latest Phase 6 run passed **53 backend tests**, frontend lint, and a production build. Verify live market access separately after deployment.
 
 ## Limitations and next research steps
 
