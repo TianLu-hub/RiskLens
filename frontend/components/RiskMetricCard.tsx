@@ -1,3 +1,6 @@
+'use client';
+
+import { useLanguage } from '@/components/LanguageProvider';
 import type { LucideIcon } from 'lucide-react';
 
 type Props = {
@@ -15,10 +18,11 @@ export function RiskMetricCard({
   icon: Icon,
   tone = 'default',
 }: Props) {
+  const { t } = useLanguage();
   return (
     <div className="min-w-0 bg-card px-3 py-4">
       <div className="flex items-start justify-between gap-2">
-        <p className="text-xs font-medium text-muted-foreground">{label}</p>
+        <p className="text-xs font-medium text-muted-foreground">{t(label)}</p>
         <Icon
           className="size-3.5 shrink-0 text-muted-foreground"
           aria-hidden="true"
@@ -29,7 +33,7 @@ export function RiskMetricCard({
       >
         {value}
       </p>
-      <p className="mt-1 text-[12px] text-muted-foreground">{detail}</p>
+      <p className="mt-1 text-[12px] text-muted-foreground">{t(detail)}</p>
     </div>
   );
 }

@@ -1,4 +1,5 @@
 'use client';
+import { useLanguage } from '@/components/LanguageProvider';
 
 import { useState } from 'react';
 import {
@@ -55,6 +56,7 @@ type RiskOfficerProps = {
 };
 
 export function RiskOfficer({ analysis }: RiskOfficerProps) {
+  const { t } = useLanguage();
   const [question, setQuestion] = useState('');
   const [portfolioValue, setPortfolioValue] = useState(100_000);
   const [result, setResult] = useState<RiskOfficerResult | null>(null);
@@ -120,14 +122,15 @@ export function RiskOfficer({ analysis }: RiskOfficerProps) {
           </div>
           <div>
             <div className="flex flex-wrap items-center gap-2">
-              <p className="section-label">AI Risk Officer</p>
-              <Badge className="rounded-sm border-emerald-300/25 bg-emerald-300/10 text-[8px] text-emerald-200">
-                PHASE 3 · ZERO-COST
+              <p className="section-label">{t('AI Risk Officer')}</p>
+              <Badge className="rounded-sm border-emerald-300/25 bg-emerald-300/10 text-[11px] text-emerald-200">
+                {t('PHASE 3 · ZERO-COST')}
               </Badge>
             </div>
-            <p className="mt-1 text-[10px] text-muted-foreground">
-              Deterministic interpretation and evidence-grounded explanation
-              over Python results
+            <p className="mt-1 text-[12px] text-muted-foreground">
+              {t(
+                'Deterministic interpretation and evidence-grounded explanation over Python results',
+              )}
             </p>
           </div>
         </div>
@@ -138,12 +141,12 @@ export function RiskOfficer({ analysis }: RiskOfficerProps) {
         <div className="grid xl:grid-cols-[390px_minmax(0,1fr)]">
           <section
             className="border-b border-border p-4 xl:border-r xl:border-b-0"
-            aria-label="Ask the AI Risk Officer"
+            aria-label={t('Ask the AI Risk Officer')}
           >
             <div className="flex items-center justify-between">
-              <p className="section-label">Officer briefing</p>
-              <span className="flex items-center gap-1 text-[8px] uppercase tracking-wider text-muted-foreground">
-                <LockKeyhole className="size-3" /> No raw prices
+              <p className="section-label">{t('Officer briefing')}</p>
+              <span className="flex items-center gap-1 text-[11px] uppercase tracking-wider text-muted-foreground">
+                <LockKeyhole className="size-3" /> {t('No raw prices')}
               </span>
             </div>
             <Textarea
@@ -154,8 +157,10 @@ export function RiskOfficer({ analysis }: RiskOfficerProps) {
                   void submitQuestion();
               }}
               className="mt-3 min-h-24 rounded-sm text-xs leading-5"
-              placeholder="Ask for a risk diagnosis, or try: What happens if tech drops 15% and rates rise 100 bps?"
-              aria-label="Question for the AI Risk Officer"
+              placeholder={t(
+                'Ask for a risk diagnosis, or try: What happens if tech drops 15% and rates rise 100 bps?',
+              )}
+              aria-label={t('Question for the AI Risk Officer')}
             />
 
             <div className="mt-2 flex flex-wrap gap-1.5">
@@ -163,21 +168,21 @@ export function RiskOfficer({ analysis }: RiskOfficerProps) {
                 <button
                   key={suggestion}
                   type="button"
-                  onClick={() => setQuestion(suggestion)}
-                  className="border border-border bg-background px-2 py-1 text-left text-[8px] leading-relaxed text-muted-foreground hover:border-primary/40 hover:text-foreground"
+                  onClick={() => setQuestion(t(suggestion))}
+                  className="border border-border bg-background px-2 py-1 text-left text-[11px] leading-relaxed text-muted-foreground hover:border-primary/40 hover:text-foreground"
                 >
-                  {suggestion}
+                  {t(suggestion)}
                 </button>
               ))}
             </div>
 
             <label
               htmlFor="officer-portfolio-value"
-              className="mt-3 block text-[8px] uppercase tracking-wider text-muted-foreground"
+              className="mt-3 block text-[11px] uppercase tracking-wider text-muted-foreground"
             >
-              Scenario portfolio value
+              {t('Scenario portfolio value')}
               <div className="relative mt-1">
-                <span className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-[9px]">
+                <span className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-[11px]">
                   $
                 </span>
                 <Input
@@ -199,24 +204,27 @@ export function RiskOfficer({ analysis }: RiskOfficerProps) {
               type="button"
               onClick={submitQuestion}
               disabled={isLoading}
-              className="mt-3 h-9 w-full rounded-sm text-[10px] font-semibold uppercase tracking-wider"
+              className="mt-3 h-9 w-full rounded-sm text-[12px] font-semibold uppercase tracking-wider"
             >
               {isLoading ? (
                 <Sparkles className="size-3 animate-pulse" />
               ) : (
                 <Send className="size-3" />
               )}
-              {isLoading ? 'Applying deterministic rules…' : 'Ask Risk Officer'}
+              {isLoading
+                ? t('Applying deterministic rules…')
+                : t('Ask Risk Officer')}
             </Button>
 
-            <div className="mt-3 border border-primary/20 bg-primary/5 p-2.5 text-[8px] leading-relaxed text-muted-foreground">
+            <div className="mt-3 border border-primary/20 bg-primary/5 p-2.5 text-[11px] leading-relaxed text-muted-foreground">
               <p className="flex items-center gap-1.5 font-semibold uppercase tracking-wider text-primary">
-                <ShieldCheck className="size-3" /> Numerical control boundary
+                <ShieldCheck className="size-3" />{' '}
+                {t('Numerical control boundary')}
               </p>
               <p className="mt-1.5">
-                Python rules select the qualitative findings. Evidence values
-                are attached from calculated metrics or explicit scenario
-                inputs. No external AI service is required.
+                {t(
+                  'Python rules select the qualitative findings. Evidence values are attached from calculated metrics or explicit scenario inputs. No external AI service is required.',
+                )}
               </p>
             </div>
           </section>
@@ -225,8 +233,8 @@ export function RiskOfficer({ analysis }: RiskOfficerProps) {
             {error && (
               <Alert variant="destructive" className="mb-3 rounded-sm">
                 <AlertTriangle />
-                <AlertTitle>Risk Officer unavailable</AlertTitle>
-                <AlertDescription>{error}</AlertDescription>
+                <AlertTitle>{t('Risk Officer unavailable')}</AlertTitle>
+                <AlertDescription>{t(error)}</AlertDescription>
               </Alert>
             )}
 
@@ -235,13 +243,12 @@ export function RiskOfficer({ analysis }: RiskOfficerProps) {
                 <div className="max-w-md">
                   <BrainCircuit className="mx-auto size-7 text-primary/70" />
                   <p className="mt-3 text-sm font-semibold">
-                    Awaiting risk question
+                    {t('Awaiting risk question')}
                   </p>
-                  <p className="mt-2 text-[10px] leading-5 text-muted-foreground">
-                    The officer diagnoses concentration, correlation, volatility
-                    contribution, tail risk, and drawdown. It also supports
-                    bounded English and Chinese shock phrases; use the
-                    structured Stress Testing panel for complex scenarios.
+                  <p className="mt-2 text-[12px] leading-5 text-muted-foreground">
+                    {t(
+                      'The officer diagnoses concentration, correlation, volatility contribution, tail risk, and drawdown. It also supports bounded English and Chinese shock phrases; use the structured Stress Testing panel for complex scenarios.',
+                    )}
                   </p>
                 </div>
               </div>
@@ -251,9 +258,10 @@ export function RiskOfficer({ analysis }: RiskOfficerProps) {
               <div className="grid min-h-64 place-items-center border border-border bg-background/30 px-6 text-center">
                 <div>
                   <Sparkles className="mx-auto size-6 animate-pulse text-primary" />
-                  <p className="mt-3 text-[10px] uppercase tracking-wider text-muted-foreground">
-                    Parsing supported language · validating context · preparing
-                    explanation
+                  <p className="mt-3 text-[12px] uppercase tracking-wider text-muted-foreground">
+                    {t(
+                      'Parsing supported language · validating context · preparing explanation',
+                    )}
                   </p>
                 </div>
               </div>
@@ -266,29 +274,29 @@ export function RiskOfficer({ analysis }: RiskOfficerProps) {
                     <div className="flex flex-wrap items-center gap-2">
                       <Badge
                         variant="outline"
-                        className="rounded-sm text-[8px]"
+                        className="rounded-sm text-[11px]"
                       >
                         {result.intent === 'stress_scenario'
-                          ? 'HYPOTHETICAL SCENARIO'
-                          : 'PORTFOLIO DIAGNOSIS'}
+                          ? t('HYPOTHETICAL SCENARIO')
+                          : t('PORTFOLIO DIAGNOSIS')}
                       </Badge>
-                      <span className="text-[8px] uppercase tracking-wider text-muted-foreground">
-                        Engine: {result.model}
+                      <span className="text-[11px] uppercase tracking-wider text-muted-foreground">
+                        {t('Engine:')} {result.model}
                       </span>
                       <Badge
                         variant="outline"
-                        className="rounded-sm text-[7px] text-muted-foreground"
+                        className="rounded-sm text-[11px] text-muted-foreground"
                       >
                         {result.narrative_source === 'deterministic_rule_engine'
-                          ? 'DETERMINISTIC RULE ENGINE'
-                          : 'OPENAI STRUCTURED OUTPUT'}
+                          ? t('DETERMINISTIC RULE ENGINE')
+                          : t('OPENAI STRUCTURED OUTPUT')}
                       </Badge>
                     </div>
                     <h3 className="mt-2 text-base font-semibold tracking-tight">
-                      {result.headline}
+                      {t(result.headline)}
                     </h3>
-                    <p className="mt-2 text-[11px] leading-5 text-muted-foreground">
-                      {result.summary}
+                    <p className="mt-2 text-[13px] leading-5 text-muted-foreground">
+                      {t(result.summary)}
                     </p>
                   </div>
                   <CheckCircle2 className="size-4 shrink-0 text-emerald-300" />
@@ -297,18 +305,18 @@ export function RiskOfficer({ analysis }: RiskOfficerProps) {
                 {result.stress_test && (
                   <div className="mt-3 border border-amber-300/20 bg-amber-300/5">
                     <div className="flex items-center justify-between border-b border-amber-300/15 px-3 py-2">
-                      <p className="flex items-center gap-1.5 text-[9px] font-semibold uppercase tracking-wider text-amber-200">
-                        <FlaskConical className="size-3" /> Python stress engine
-                        result
+                      <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-amber-200">
+                        <FlaskConical className="size-3" />{' '}
+                        {t('Python stress engine result')}
                       </p>
-                      <span className="text-[8px] uppercase tracking-wider text-muted-foreground">
-                        Hypothetical · not a prediction
+                      <span className="text-[11px] uppercase tracking-wider text-muted-foreground">
+                        {t('Hypothetical · not a prediction')}
                       </span>
                     </div>
                     <div className="grid grid-cols-2 gap-px bg-border sm:grid-cols-4">
                       <div className="bg-card p-2.5">
-                        <p className="text-[8px] uppercase text-muted-foreground">
-                          Estimated return
+                        <p className="text-[11px] uppercase text-muted-foreground">
+                          {t('Estimated return')}
                         </p>
                         <p className="mt-1 font-mono text-sm text-rose-300">
                           {percent(
@@ -317,24 +325,24 @@ export function RiskOfficer({ analysis }: RiskOfficerProps) {
                         </p>
                       </div>
                       <div className="bg-card p-2.5">
-                        <p className="text-[8px] uppercase text-muted-foreground">
-                          Estimated P&amp;L
+                        <p className="text-[11px] uppercase text-muted-foreground">
+                          {t('Estimated P&L')}
                         </p>
                         <p className="mt-1 font-mono text-sm text-rose-300">
                           {money(result.stress_test.estimated_dollar_pnl)}
                         </p>
                       </div>
                       <div className="bg-card p-2.5">
-                        <p className="text-[8px] uppercase text-muted-foreground">
-                          Before
+                        <p className="text-[11px] uppercase text-muted-foreground">
+                          {t('Before')}
                         </p>
                         <p className="mt-1 font-mono text-sm">
                           {money(result.stress_test.portfolio_value_before)}
                         </p>
                       </div>
                       <div className="bg-card p-2.5">
-                        <p className="text-[8px] uppercase text-muted-foreground">
-                          After
+                        <p className="text-[11px] uppercase text-muted-foreground">
+                          {t('After')}
                         </p>
                         <p className="mt-1 font-mono text-sm">
                           {money(result.stress_test.portfolio_value_after)}
@@ -350,29 +358,29 @@ export function RiskOfficer({ analysis }: RiskOfficerProps) {
                       key={`${finding.title}-${finding.explanation}`}
                       className="border border-border bg-background/35 p-3"
                     >
-                      <p className="text-[10px] font-semibold text-foreground">
-                        {finding.title}
+                      <p className="text-[12px] font-semibold text-foreground">
+                        {t(finding.title)}
                       </p>
-                      <p className="mt-1.5 text-[9px] leading-4 text-muted-foreground">
-                        {finding.explanation}
+                      <p className="mt-1.5 text-[11px] leading-4 text-muted-foreground">
+                        {t(finding.explanation)}
                       </p>
                       <div className="mt-2 space-y-1.5">
                         {finding.evidence.map((item) => (
                           <div
                             key={item.key}
-                            className="flex flex-wrap items-center justify-between gap-2 border-t border-border/70 pt-1.5 text-[8px]"
+                            className="flex flex-wrap items-center justify-between gap-2 border-t border-border/70 pt-1.5 text-[11px]"
                           >
                             <span className="text-muted-foreground">
-                              {item.label}
+                              {t(item.label)}
                             </span>
                             <div className="flex items-center gap-1.5">
-                              <span className="font-mono text-[9px] text-foreground">
+                              <span className="font-mono text-[11px] text-foreground">
                                 {item.value}
                               </span>
                               <Badge
-                                className={`rounded-sm px-1 py-0 text-[6px] ${evidenceTone(item.source_type)}`}
+                                className={`rounded-sm px-1 py-0 text-[10px] ${evidenceTone(item.source_type)}`}
                               >
-                                {item.source_type.replaceAll('_', ' ')}
+                                {t(item.source_type.replaceAll('_', ' '))}
                               </Badge>
                             </div>
                           </div>
@@ -384,26 +392,26 @@ export function RiskOfficer({ analysis }: RiskOfficerProps) {
 
                 <div className="mt-3 grid gap-2 border border-border p-3 sm:grid-cols-[1fr_auto]">
                   <div>
-                    <p className="section-label">Known limitations</p>
+                    <p className="section-label">{t('Known limitations')}</p>
                     {result.limitations.map((limitation) => (
                       <p
                         key={limitation}
-                        className="mt-1.5 text-[8px] leading-relaxed text-muted-foreground"
+                        className="mt-1.5 text-[11px] leading-relaxed text-muted-foreground"
                       >
-                        • {limitation}
+                        • {t(limitation)}
                       </p>
                     ))}
                   </div>
                   <Badge
                     variant="outline"
-                    className="h-fit rounded-sm text-[7px] text-muted-foreground"
+                    className="h-fit rounded-sm text-[11px] text-muted-foreground"
                   >
-                    NO BUY / SELL ADVICE
+                    {t('NO BUY / SELL ADVICE')}
                   </Badge>
                 </div>
 
-                <p className="mt-2 text-[8px] leading-relaxed text-muted-foreground">
-                  {result.numerical_policy} {result.disclaimer}
+                <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">
+                  {t(result.numerical_policy)} {t(result.disclaimer)}
                 </p>
               </div>
             )}

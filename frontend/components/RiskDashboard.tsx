@@ -1,4 +1,5 @@
 'use client';
+import { LanguageSwitch, useLanguage } from '@/components/LanguageProvider';
 
 import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import {
@@ -52,6 +53,7 @@ import type {
 } from '@/lib/types';
 
 export function RiskDashboard() {
+  const { t, locale } = useLanguage();
   const activeSection = useSyncExternalStore(
     subscribeToSection,
     getCurrentSection,
@@ -202,20 +204,21 @@ export function RiskDashboard() {
         }}
         className="sr-only z-50 bg-primary p-3 text-primary-foreground focus:not-sr-only focus:fixed focus:left-3 focus:top-3"
       >
-        Skip to analysis
+        {t('Skip to analysis')}
       </a>
       <header className="sticky top-0 z-30 flex h-16 items-center justify-between gap-3 border-b border-border bg-background px-4 lg:px-5">
         <div className="flex items-center gap-3">
           <Activity className="size-7 text-primary" aria-hidden="true" />
           <span className="text-xl font-semibold tracking-tight">RiskLens</span>
           <span className="hidden border-l border-border pl-3 text-xs text-muted-foreground sm:block">
-            PORTFOLIO RISK TERMINAL
+            {t('PORTFOLIO RISK TERMINAL')}
           </span>
         </div>
         <div className="flex items-center gap-3">
+          <LanguageSwitch />
           <span className="hidden items-center gap-1.5 text-xs text-muted-foreground md:flex">
             <ShieldCheck className="size-3.5 text-emerald-300" />
-            Python-computed metrics
+            {t('Python-computed metrics')}
           </span>
           <Badge
             className={
@@ -227,14 +230,14 @@ export function RiskDashboard() {
             <span
               className={`size-1.5 rounded-full ${mode === 'live' ? 'bg-emerald-400' : 'bg-amber-300'}`}
             />
-            {mode === 'live' ? 'HISTORICAL DATA' : 'DEMO SNAPSHOT'}
+            {mode === 'live' ? t('HISTORICAL DATA') : t('DEMO SNAPSHOT')}
           </Badge>
         </div>
       </header>
 
       <div className="grid min-h-[calc(100dvh-4rem)] lg:grid-cols-[260px_minmax(0,1fr)]">
         <aside
-          aria-label="Portfolio workspace"
+          aria-label={t('Portfolio workspace')}
           className="min-w-0 border-b border-border bg-sidebar lg:sticky lg:top-16 lg:h-[calc(100dvh-4rem)] lg:overflow-y-auto lg:border-r lg:border-b-0"
         >
           <WorkspaceNav active={activeSection} />
@@ -245,7 +248,9 @@ export function RiskDashboard() {
             aria-controls="portfolio-controls"
             onClick={() => setPortfolioOpen(!portfolioOpen)}
           >
-            <span>Portfolio · {positions.length} positions</span>
+            <span>
+              {t('Portfolio ·')} {positions.length} {t('positions')}
+            </span>
             <ChevronDown
               className={`size-4 transition-transform ${portfolioOpen ? 'rotate-180' : ''}`}
             />
@@ -260,7 +265,7 @@ export function RiskDashboard() {
                   htmlFor="analysis-lookback"
                   className="text-xs text-muted-foreground"
                 >
-                  Lookback
+                  {t('Lookback')}
                 </label>
                 <NativeSelect
                   id="analysis-lookback"
@@ -273,9 +278,15 @@ export function RiskDashboard() {
                     setStorageNotice(null);
                   }}
                 >
-                  <NativeSelectOption value="1">1 year</NativeSelectOption>
-                  <NativeSelectOption value="3">3 years</NativeSelectOption>
-                  <NativeSelectOption value="5">5 years</NativeSelectOption>
+                  <NativeSelectOption value="1">
+                    {t('1 year')}
+                  </NativeSelectOption>
+                  <NativeSelectOption value="3">
+                    {t('3 years')}
+                  </NativeSelectOption>
+                  <NativeSelectOption value="5">
+                    {t('5 years')}
+                  </NativeSelectOption>
                 </NativeSelect>
               </div>
               <div>
@@ -283,7 +294,7 @@ export function RiskDashboard() {
                   htmlFor="analysis-risk-free"
                   className="text-xs text-muted-foreground"
                 >
-                  Risk-free rate
+                  {t('Risk-free rate')}
                 </label>
                 <div className="relative mt-1">
                   <Input
@@ -315,9 +326,9 @@ export function RiskDashboard() {
               isLoading={isLoading}
             />
             <p className="px-4 py-3 text-xs leading-5 text-muted-foreground">
-              Holdings stay in this browser.
+              {t('Holdings stay in this browser.')}
               <br />
-              Analyze to update historical results.
+              {t('Analyze to update historical results.')}
             </p>
           </div>
         </aside>
@@ -330,13 +341,13 @@ export function RiskDashboard() {
           <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
             <div>
               <p className="mb-1 text-xs font-medium uppercase tracking-widest text-primary">
-                Main portfolio / Research workspace
+                {t('Main portfolio / Research workspace')}
               </p>
               <h1 className="text-2xl font-semibold tracking-tight">
-                {view.title}
+                {t(view.title)}
               </h1>
               <p className="mt-1 text-sm text-muted-foreground">
-                {view.description}
+                {t(view.description)}
               </p>
             </div>
             <div className="flex items-center gap-2 rounded border border-border bg-card px-3 py-2 text-xs text-muted-foreground">
@@ -348,8 +359,10 @@ export function RiskDashboard() {
           {(storageNotice || storageUnavailable) && (
             <output className="mb-3 block text-xs leading-5 text-muted-foreground">
               {storageUnavailable
-                ? 'Portfolio could not be saved on this device. You can still run analyses.'
-                : storageNotice}
+                ? t(
+                    'Portfolio could not be saved on this device. You can still run analyses.',
+                  )
+                : storageNotice && t(storageNotice)}
             </output>
           )}
           {mode === 'snapshot' && (
@@ -359,9 +372,10 @@ export function RiskDashboard() {
                 aria-hidden="true"
               />
               <p>
-                <span className="font-semibold">Demo data.</span> The charts
-                below use a fixed synthetic example. Select a portfolio and
-                click Analyze portfolio to load historical prices.
+                <span className="font-semibold">{t('Demo data.')}</span>{' '}
+                {t(
+                  'The charts below use a fixed synthetic example. Select a portfolio and click Analyze portfolio to load historical prices.',
+                )}
               </p>
             </div>
           )}
@@ -373,26 +387,27 @@ export function RiskDashboard() {
               />
               <p>
                 <span className="font-semibold">
-                  Inputs changed — analysis needs updating.
+                  {t('Inputs changed — analysis needs updating.')}
                 </span>{' '}
-                The risk charts still show{' '}
+                {t('The risk charts still show')}{' '}
                 {mode === 'snapshot'
-                  ? 'the demo portfolio'
-                  : 'the last analyzed portfolio'}
-                . Click Analyze portfolio to refresh them. Stress testing,
-                optimization, and backtesting use your current inputs.
+                  ? t('the demo portfolio')
+                  : t('the last analyzed portfolio')}
+                {t(
+                  '. Click Analyze portfolio to refresh them. Stress testing, optimization, and backtesting use your current inputs.',
+                )}
               </p>
             </output>
           )}
           {error && (
             <Alert variant="destructive" className="mb-3 rounded-sm">
               <AlertTriangle />
-              <AlertTitle>Analysis unavailable</AlertTitle>
+              <AlertTitle>{t('Analysis unavailable')}</AlertTitle>
               <AlertDescription>
-                {error}{' '}
+                {t(error)}{' '}
                 {mode === 'snapshot'
-                  ? 'The labeled demo snapshot remains visible.'
-                  : 'The previous historical analysis remains visible.'}
+                  ? t('The labeled demo snapshot remains visible.')
+                  : t('The previous historical analysis remains visible.')}
               </AlertDescription>
             </Alert>
           )}
@@ -419,10 +434,10 @@ export function RiskDashboard() {
                   <BrainCircuit className="size-5 shrink-0 text-primary" />
                   <span>
                     <span className="block text-sm font-semibold">
-                      Explore with Risk Officer
+                      {t('Explore with Risk Officer')}
                     </span>
                     <span className="mt-1 block text-xs text-muted-foreground">
-                      Understand the risks behind these numbers →
+                      {t('Understand the risks behind these numbers →')}
                     </span>
                   </span>
                 </button>
@@ -448,10 +463,12 @@ export function RiskDashboard() {
                 className="block rounded-md border border-primary/30 bg-card p-5 text-sm"
               >
                 <p className="font-semibold">
-                  Risk Officer needs an updated analysis
+                  {t('Risk Officer needs an updated analysis')}
                 </p>
                 <p className="mt-2 text-muted-foreground">
-                  Analyze the current portfolio before asking about its risks.
+                  {t(
+                    'Analyze the current portfolio before asking about its risks.',
+                  )}
                 </p>
               </output>
             ) : (
@@ -475,17 +492,22 @@ export function RiskDashboard() {
           <footer className="mt-5 flex flex-wrap items-center justify-between gap-2 border-t border-border py-3 text-xs text-muted-foreground">
             <span className="flex items-center gap-2">
               <Database className="size-3.5" />
-              {analysis.data_quality.source} ·{' '}
-              {analysis.data_quality.observations} observations
+              {t(analysis.data_quality.source)} ·{' '}
+              {analysis.data_quality.observations} {t('observations')}
             </span>
-            <span>Historical analysis · Hypothetical scenarios</span>
+            <span>{t('Historical analysis · Hypothetical scenarios')}</span>
           </footer>
+          {locale === 'zh' && (
+            <p className="text-xs leading-5 text-muted-foreground">
+              金额单位为美元。部分后端自由文本保留英文原文；语言切换不改变数据、计算结果或模型假设。
+            </p>
+          )}
           {analysis.data_quality.warnings.map((warning) => (
             <p
               key={warning}
               className="mt-1 text-xs leading-5 text-amber-200/80"
             >
-              Data note: {warning}
+              {t('Data note:')} {t(warning)}
             </p>
           ))}
         </div>

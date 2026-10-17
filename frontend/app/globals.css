@@ -101,6 +101,8 @@
 /* CardHeader defaults to grid; the terminal headers use a title/action row. */
 .risk-workspace [data-slot='card-header'] { display: flex; }
 
+:lang(zh-CN) .risk-workspace .section-label { letter-spacing: 0.04em; }
+
 :is(#overview, #contribution, #correlation, #drawdown, #factor-exposure, #stress-testing, #risk-officer, #optimization, #backtest) {
   scroll-margin-top: 4.5rem;
 }

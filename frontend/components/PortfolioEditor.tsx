@@ -1,10 +1,14 @@
 'use client';
+import { useLanguage } from '@/components/LanguageProvider';
 
 import { LoaderCircle, Plus, Scale, Trash2 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { NativeSelect, NativeSelectOption } from '@/components/ui/native-select';
+import {
+  NativeSelect,
+  NativeSelectOption,
+} from '@/components/ui/native-select';
 import { DEMO_PORTFOLIOS } from '@/lib/demo-data';
 import type { DemoPortfolioName, PositionInput } from '@/lib/types';
 
@@ -25,14 +29,21 @@ export function PortfolioEditor({
   onAnalyze,
   isLoading,
 }: Props) {
+  const { t } = useLanguage();
   const total = positions.reduce((sum, position) => sum + position.weight, 0);
   const isValid =
     positions.length > 0 &&
-    positions.every((position) => position.ticker.trim() && position.weight >= 0) &&
+    positions.every(
+      (position) => position.ticker.trim() && position.weight >= 0,
+    ) &&
     Math.abs(total - 1) <= 0.0001;
 
   function updatePosition(index: number, patch: Partial<PositionInput>) {
-    onChange(positions.map((position, itemIndex) => itemIndex === index ? { ...position, ...patch } : position));
+    onChange(
+      positions.map((position, itemIndex) =>
+        itemIndex === index ? { ...position, ...patch } : position,
+      ),
+    );
   }
 
   function selectPreset(nextPreset: DemoPortfolioName) {
@@ -42,38 +53,60 @@ export function PortfolioEditor({
 
   function normalize() {
     if (total <= 0) return;
-    onChange(positions.map((position) => ({ ...position, weight: position.weight / total })));
+    onChange(
+      positions.map((position) => ({
+        ...position,
+        weight: position.weight / total,
+      })),
+    );
   }
 
   return (
     <div className="flex flex-col" aria-busy={isLoading}>
       <div className="border-b border-border px-4 py-3">
-        <label className="section-label" htmlFor="portfolio-preset">Portfolio</label>
+        <label className="section-label" htmlFor="portfolio-preset">
+          {t('Portfolio')}
+        </label>
         <NativeSelect
           className="mt-2 w-full"
           size="sm"
           id="portfolio-preset"
           value={preset}
           disabled={isLoading}
-          onChange={(event) => selectPreset(event.target.value as DemoPortfolioName)}
-          aria-label="Select demo portfolio"
+          onChange={(event) =>
+            selectPreset(event.target.value as DemoPortfolioName)
+          }
+          aria-label={t('Select demo portfolio')}
         >
-          {Object.keys(DEMO_PORTFOLIOS).map((name) => <NativeSelectOption key={name} value={name}>{name}</NativeSelectOption>)}
+          {Object.keys(DEMO_PORTFOLIOS).map((name) => (
+            <NativeSelectOption key={name} value={name}>
+              {t(name)}
+            </NativeSelectOption>
+          ))}
         </NativeSelect>
       </div>
 
       <div className="max-h-80 overflow-y-auto">
         <div className="grid grid-cols-[1fr_72px_28px] gap-2 border-b border-border px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
-          <span>Instrument</span><span className="text-right">Weight</span><span />
+          <span>{t('Instrument')}</span>
+          <span className="text-right">{t('Weight')}</span>
+          <span />
         </div>
         {positions.map((position, index) => (
-          <div key={index} className="grid grid-cols-[1fr_72px_28px] items-center gap-2 border-b border-border px-3 py-2">
+          <div
+            key={index}
+            className="grid grid-cols-[1fr_72px_28px] items-center gap-2 border-b border-border px-3 py-2"
+          >
             <Input
               value={position.ticker}
               disabled={isLoading}
-              onChange={(event) => updatePosition(index, { ticker: event.target.value.toUpperCase() })}
+              onChange={(event) =>
+                updatePosition(index, {
+                  ticker: event.target.value.toUpperCase(),
+                })
+              }
               className="h-8 rounded border-transparent bg-transparent px-1 font-mono text-sm font-semibold hover:border-input focus:border-ring"
-              aria-label={`Ticker ${index + 1}`}
+              aria-label={t('Ticker {index}', { index: index + 1 })}
             />
             <div className="relative">
               <Input
@@ -83,19 +116,35 @@ export function PortfolioEditor({
                 step="0.1"
                 value={Number((position.weight * 100).toFixed(4))}
                 disabled={isLoading}
-                onChange={(event) => updatePosition(index, { weight: Math.max(0, Number(event.target.value) / 100) })}
+                onChange={(event) =>
+                  updatePosition(index, {
+                    weight: Math.max(0, Number(event.target.value) / 100),
+                  })
+                }
                 className="h-8 rounded pr-5 text-right font-mono text-sm"
-                aria-label={`${position.ticker || `Position ${index + 1}`} weight percent`}
+                aria-label={t('{ticker} weight percent', {
+                  ticker: position.ticker || String(index + 1),
+                })}
               />
-              <span className="pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2 text-[12px] text-muted-foreground">%</span>
+              <span className="pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2 text-[12px] text-muted-foreground">
+                %
+              </span>
             </div>
             <Button
               size="icon-xs"
               variant="ghost"
-              aria-label={`Remove ${position.ticker || `position ${index + 1}`}`}
+              aria-label={t('Remove {ticker}', {
+                ticker: position.ticker || String(index + 1),
+              })}
               disabled={isLoading || positions.length === 1}
-              onClick={() => onChange(positions.filter((_, itemIndex) => itemIndex !== index))}
-            ><Trash2 /></Button>
+              onClick={() =>
+                onChange(
+                  positions.filter((_, itemIndex) => itemIndex !== index),
+                )
+              }
+            >
+              <Trash2 />
+            </Button>
           </div>
         ))}
       </div>
@@ -108,16 +157,52 @@ export function PortfolioEditor({
             className="rounded-sm"
             disabled={isLoading}
             onClick={() => onChange([...positions, { ticker: '', weight: 0 }])}
-          ><Plus /> Position</Button>
-          <Button size="sm" variant="outline" className="rounded-sm" onClick={normalize} disabled={isLoading || total <= 0}><Scale /> Normalize</Button>
+          >
+            <Plus /> {t('Position')}
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            className="rounded-sm"
+            onClick={normalize}
+            disabled={isLoading || total <= 0}
+          >
+            <Scale /> {t('Normalize')}
+          </Button>
         </div>
         <div className="mt-3 flex items-center justify-between text-[12px] uppercase tracking-wider text-muted-foreground">
-          <span>Total weight</span>
-          <span className={isValid ? 'font-mono text-emerald-300' : 'font-mono text-amber-300'}>{(total * 100).toFixed(2)}% · {isValid ? 'Valid' : 'Review'}</span>
+          <span>{t('Total weight')}</span>
+          <span
+            className={
+              isValid
+                ? 'font-mono text-emerald-300'
+                : 'font-mono text-amber-300'
+            }
+          >
+            {(total * 100).toFixed(2)}% · {isValid ? t('Valid') : t('Review')}
+          </span>
         </div>
-        <div className="mt-1.5 h-1 overflow-hidden bg-muted"><div className={isValid ? 'h-full bg-emerald-400' : 'h-full bg-amber-400'} style={{ width: `${Math.min(total * 100, 100)}%` }} /></div>
-        <Button className="mt-3 h-10 w-full rounded font-semibold" size="sm" disabled={!isValid || isLoading} onClick={onAnalyze}>
-          {isLoading ? <><LoaderCircle className="animate-spin" /> Calculating…</> : 'Analyze portfolio'}
+        <div className="mt-1.5 h-1 overflow-hidden bg-muted">
+          <div
+            className={
+              isValid ? 'h-full bg-emerald-400' : 'h-full bg-amber-400'
+            }
+            style={{ width: `${Math.min(total * 100, 100)}%` }}
+          />
+        </div>
+        <Button
+          className="mt-3 h-10 w-full rounded font-semibold"
+          size="sm"
+          disabled={!isValid || isLoading}
+          onClick={onAnalyze}
+        >
+          {isLoading ? (
+            <>
+              <LoaderCircle className="animate-spin" /> {t('Calculating…')}
+            </>
+          ) : (
+            t('Analyze portfolio')
+          )}
         </Button>
       </div>
     </div>

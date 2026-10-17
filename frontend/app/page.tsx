@@ -1,5 +1,10 @@
 import { RiskDashboard } from '@/components/RiskDashboard';
+import { LanguageProvider } from '@/components/LanguageProvider';
 
 export default function Home() {
-  return <RiskDashboard />;
+  return (
+    <LanguageProvider>
+      <RiskDashboard />
+    </LanguageProvider>
+  );
 }

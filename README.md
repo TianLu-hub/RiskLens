@@ -12,6 +12,8 @@ RiskLens is a full-stack, desktop-first risk dashboard for stock and ETF portfol
 
 ## Features
 
+The header's **EN / 中文** control switches the interface between English and Simplified Chinese and remembers your choice in this browser. It does not reset inputs or change numerical results. Unmapped backend prose remains in its original language; monetary values remain USD.
+
 | Area | Implemented capability |
 | --- | --- |
 | Risk overview | Geometric return, volatility, Sharpe estimate, historical one-day VaR/CVaR, drawdown, correlation, Euler risk contribution, concentration, and rule-based flags. |

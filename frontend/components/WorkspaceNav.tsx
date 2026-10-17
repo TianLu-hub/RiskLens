@@ -1,4 +1,5 @@
 'use client';
+import { useLanguage } from '@/components/LanguageProvider';
 
 import {
   Activity,
@@ -65,9 +66,10 @@ export const workspaceViews = [
 }[];
 
 export function WorkspaceNav({ active }: { active: WorkspaceSection }) {
+  const { t } = useLanguage();
   return (
     <nav
-      aria-label="Workspace sections"
+      aria-label={t('Workspace sections')}
       className="flex gap-1 overflow-x-auto border-b border-border p-2 lg:flex-col lg:p-3"
     >
       {workspaceViews.map(({ id, label, icon: Icon }) => (
@@ -89,7 +91,7 @@ export function WorkspaceNav({ active }: { active: WorkspaceSection }) {
           className={`flex shrink-0 items-center gap-3 rounded-md border-l-2 px-3 py-2.5 text-sm font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary ${active === id ? 'border-primary bg-primary/10 text-primary' : 'border-transparent text-muted-foreground hover:bg-accent hover:text-foreground'}`}
         >
           <Icon className="size-4 shrink-0" aria-hidden="true" />
-          {label}
+          {t(label)}
         </a>
       ))}
     </nav>

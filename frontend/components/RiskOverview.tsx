@@ -1,4 +1,5 @@
 'use client';
+import { useLanguage } from '@/components/LanguageProvider';
 
 import {
   Activity,
@@ -26,6 +27,7 @@ const chartConfig = {
 const pct = (value: number) => `${(value * 100).toFixed(2)}%`;
 
 export function RiskOverview({ analysis }: { analysis: PortfolioAnalysis }) {
+  const { t } = useLanguage();
   const { metrics, drawdown } = analysis;
   const cards = [
     {
@@ -68,7 +70,7 @@ export function RiskOverview({ analysis }: { analysis: PortfolioAnalysis }) {
   ];
 
   return (
-    <section id="overview" aria-label="Portfolio risk metrics">
+    <section id="overview" aria-label={t('Portfolio risk metrics')}>
       <div className="grid grid-cols-2 gap-px overflow-hidden rounded-md border border-border bg-border md:grid-cols-3 xl:grid-cols-6">
         {cards.map((card) => (
           <RiskMetricCard key={card.label} {...card} />
@@ -83,6 +85,7 @@ export function PortfolioPerformance({
 }: {
   analysis: PortfolioAnalysis;
 }) {
+  const { t } = useLanguage();
   const chartData = analysis.performance.map((point) => ({
     ...point,
     value: point.value * 100,
@@ -91,9 +94,9 @@ export function PortfolioPerformance({
     <Card className="rounded-md bg-card ring-border">
       <CardHeader className="flex-row items-center justify-between border-b border-border py-3">
         <div>
-          <p className="section-label">Portfolio performance</p>
+          <p className="section-label">{t('Portfolio performance')}</p>
           <p className="mt-1 text-[12px] text-muted-foreground">
-            Growth from the first aligned observation
+            {t('Growth from the first aligned observation')}
           </p>
         </div>
         <span className="font-mono text-lg text-primary">
@@ -102,7 +105,9 @@ export function PortfolioPerformance({
       </CardHeader>
       <CardContent className="p-3">
         <ChartContainer
-          config={chartConfig}
+          config={{
+            value: { ...chartConfig.value, label: t('Cumulative return') },
+          }}
           className="h-[260px] w-full aspect-auto"
         >
           <AreaChart
