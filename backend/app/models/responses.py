@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from pydantic import BaseModel, Field
 
+from app.data.provenance import MarketDataProvenance
+
 
 class TimeSeriesPoint(BaseModel):
     date: str
@@ -70,6 +72,7 @@ class DataQuality(BaseModel):
     end_date: str
     requested_lookback_years: int
     warnings: list[str] = Field(default_factory=list)
+    provenance: MarketDataProvenance | None = None
 
 
 class FactorExposureResult(BaseModel):

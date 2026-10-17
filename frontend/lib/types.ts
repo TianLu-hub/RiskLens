@@ -68,7 +68,12 @@ export type BacktestResult = {
   current: BacktestMetrics;
   optimized: BacktestMetrics;
   spy_buy_and_hold: BacktestMetrics | null;
-  series: Array<{date: string; current_wealth: number; optimized_wealth: number; spy_wealth: number | null}>;
+  series: Array<{
+    date: string;
+    current_wealth: number;
+    optimized_wealth: number;
+    spy_wealth: number | null;
+  }>;
   folds: Array<{
     train_start: string;
     train_end: string;
@@ -169,7 +174,30 @@ export type PortfolioAnalysis = {
     end_date: string;
     requested_lookback_years: number;
     warnings: string[];
+    provenance?: MarketDataProvenance | null;
   };
+};
+
+export type MarketDataProvenance = {
+  data_type: 'historical' | 'synthetic';
+  fetched_at: string;
+  cache_hit: boolean;
+  cache_ttl_seconds: number;
+  price_basis: 'adjusted_close' | 'unadjusted_close';
+  price_start_date: string;
+  price_end_date: string;
+  raw_price_rows: number;
+  aligned_price_rows: number;
+  dropped_price_rows: number;
+  forward_fill_limit: number;
+  assets: Array<{
+    ticker: string;
+    observed_prices: number;
+    missing_prices: number;
+    filled_prices: number;
+    first_observed_date: string;
+    last_observed_date: string;
+  }>;
 };
 
 export type DemoPortfolioName =

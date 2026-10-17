@@ -175,6 +175,7 @@ def backtest_portfolio(
         series=points,
         folds=folds,
         data_quality=DataQuality(
+            provenance=history.provenance,
             source=history.source,
             observations=len(returns),
             start_date=returns.index[0].date().isoformat(),

@@ -72,6 +72,7 @@ def optimize_portfolio(
         ],
         one_way_turnover=float(np.abs(optimized - current).sum() / 2),
         data_quality=DataQuality(
+            provenance=history.provenance,
             source=history.source,
             observations=len(returns),
             start_date=returns.index[0].date().isoformat(),

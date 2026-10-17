@@ -184,6 +184,12 @@ Example `/portfolio/backtest` request:
 
 The frontend is deployed as an OpenAI Site and the FastAPI backend on Railway. For another deployment, set frontend `NEXT_PUBLIC_API_URL` to the backend's **public HTTPS origin**, never localhost; set backend `CORS_ORIGINS` to the exact frontend origin. Keep any optional `OPENAI_API_KEY` on the backend only. Saved accounts and portfolios are not part of this release.
 
+## Data provenance
+
+The bilingual data panel distinguishes historical daily prices, synthetic demo data, and hypothetical model results. Analysis, optimization, and backtest responses include optional `data_quality.provenance`: provider fetch time (UTC), cache hit/TTL, price basis, aligned price dates, and per-asset coverage. A cache hit retains the original fetch time; it is not a new quote. Legacy providers without metadata show “Not reported”, never a fabricated timestamp.
+
+The actual sample count is daily **returns**, not price rows or the requested number of years. Backtest metadata includes both training and test data; the forward-test panel separately reports test days. Missingness counts use provider-returned dates, not a full exchange-calendar audit. Up to three missing rows are forward-filled, remaining incomplete dates are excluded, and the retained fill count and each asset's last observed date are disclosed. Calculations and existing alignment rules are unchanged.
+
 ## Tests
 
 ```bash
@@ -197,7 +203,7 @@ pnpm test
 pnpm build
 ```
 
-Tests use deterministic synthetic price fixtures, with no Yahoo Finance or LLM dependency. The latest Phase 6 run passed **53 backend tests**, frontend lint, and a production build. Verify live market access separately after deployment.
+Tests use deterministic synthetic price fixtures, with no Yahoo Finance or LLM dependency. The provenance update passed **60 backend tests and 21 frontend tests**, plus lint and TypeScript checks. Verify live market access separately after deployment.
 
 ## Limitations and next research steps
 

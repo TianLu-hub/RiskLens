@@ -164,6 +164,7 @@ def analyze_portfolio(
             cvar_value=cvar_value,
         ),
         data_quality=DataQuality(
+            provenance=history.provenance,
             source=history.source,
             observations=len(asset_returns),
             start_date=asset_returns.index[0].date().isoformat(),

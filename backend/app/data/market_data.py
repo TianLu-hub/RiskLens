@@ -10,6 +10,8 @@ from threading import Lock
 import pandas as pd
 import yfinance as yf
 
+from app.data.provenance import AssetCoverage, MarketDataProvenance
+
 
 class MarketDataError(RuntimeError):
     """Base class for user-safe market-data failures."""
@@ -38,6 +40,7 @@ class PriceHistory:
     prices: pd.DataFrame
     source: str
     warnings: list[str]
+    provenance: MarketDataProvenance | None = None
 
 
 class MarketDataProvider(ABC):
@@ -70,7 +73,7 @@ class YahooFinanceProvider(MarketDataProvider):
         with self._lock:
             cached = self._cache.get(key)
             if cached and now - cached[0] < self.cache_ttl:
-                return self._copy_history(cached[1])
+                return self._copy_history(cached[1], cache_hit=True)
 
         try:
             raw = yf.download(
@@ -86,6 +89,8 @@ class YahooFinanceProvider(MarketDataProvider):
             raise MarketDataUnavailableError(
                 "Market data is temporarily unavailable. Please try again."
             ) from exc
+
+        fetched_at = datetime.now(UTC)
 
         if raw is None or raw.empty:
             raise InvalidTickerError(normalized)
@@ -104,6 +109,7 @@ class YahooFinanceProvider(MarketDataProvider):
         prices = prices[normalized].sort_index()
         prices.index = pd.to_datetime(prices.index).tz_localize(None)
         original_counts = prices.notna().sum()
+        original_prices = prices.copy()
 
         # Short exchange-specific gaps are forward-filled. Remaining rows are
         # restricted to the common date range so portfolio returns are aligned.
@@ -129,23 +135,70 @@ class YahooFinanceProvider(MarketDataProvider):
                 "Assets had mismatched histories; analytics use their common aligned date range."
             )
 
+        coverage = [
+            AssetCoverage(
+                ticker=ticker,
+                observed_prices=int(original_counts[ticker]),
+                missing_prices=int(original_prices[ticker].isna().sum()),
+                filled_prices=int(
+                    original_prices.loc[prices.index, ticker].isna().sum()
+                ),
+                first_observed_date=original_prices[ticker]
+                .first_valid_index()
+                .date()
+                .isoformat(),
+                last_observed_date=original_prices[ticker]
+                .last_valid_index()
+                .date()
+                .isoformat(),
+            )
+            for ticker in normalized
+        ]
+
         result = PriceHistory(
-            prices=prices.astype(float), source="Yahoo Finance", warnings=warnings
+            prices=prices.astype(float),
+            source="Yahoo Finance",
+            warnings=warnings,
+            provenance=MarketDataProvenance(
+                data_type="historical",
+                fetched_at=fetched_at,
+                cache_hit=False,
+                cache_ttl_seconds=max(0, int(self.cache_ttl.total_seconds())),
+                price_basis="adjusted_close"
+                if has_adjusted_close
+                else "unadjusted_close",
+                price_start_date=prices.index[0].date().isoformat(),
+                price_end_date=prices.index[-1].date().isoformat(),
+                raw_price_rows=len(original_prices),
+                aligned_price_rows=len(prices),
+                dropped_price_rows=len(original_prices) - len(prices),
+                forward_fill_limit=3,
+                assets=coverage,
+            ),
         )
         with self._lock:
             # DataFrames and lists remain mutable inside a frozen dataclass. Keep
             # a private snapshot so a caller cannot corrupt subsequent analyses.
-            self._cache[key] = (datetime.now(UTC), self._copy_history(result))
+            self._cache[key] = (fetched_at, self._copy_history(result))
         return self._copy_history(result)
 
     @staticmethod
-    def _copy_history(history: PriceHistory) -> PriceHistory:
+    def _copy_history(
+        history: PriceHistory, *, cache_hit: bool = False
+    ) -> PriceHistory:
         """Return an isolated snapshot of mutable cached market-data fields."""
 
         return PriceHistory(
             prices=history.prices.copy(deep=True),
             source=history.source,
             warnings=list(history.warnings),
+            provenance=(
+                history.provenance.model_copy(
+                    deep=True, update={"cache_hit": cache_hit}
+                )
+                if history.provenance is not None
+                else None
+            ),
         )
 
     @staticmethod

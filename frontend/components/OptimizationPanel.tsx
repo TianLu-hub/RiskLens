@@ -1,4 +1,5 @@
 'use client';
+import { DataProvenance } from '@/components/DataProvenance';
 import { useLanguage } from '@/components/LanguageProvider';
 
 import { useState } from 'react';
@@ -332,6 +333,10 @@ export function OptimizationPanel({
                     {t('API RESULT')}
                   </Badge>
                 </div>
+                <DataProvenance
+                  quality={currentResult.data_quality}
+                  context="optimization"
+                />
                 <MetricComparison result={currentResult} />
                 <div className="mt-3 grid gap-3 2xl:grid-cols-[1fr_180px]">
                   <div className="overflow-x-auto border border-border">

@@ -1,4 +1,5 @@
 'use client';
+import { DataProvenance } from '@/components/DataProvenance';
 import { useLanguage } from '@/components/LanguageProvider';
 
 import { useState } from 'react';
@@ -361,6 +362,10 @@ export function BacktestPanel({
                     {t('API RESULT')}
                   </Badge>
                 </div>
+                <DataProvenance
+                  quality={current.data_quality}
+                  context="backtest"
+                />
                 <ChartContainer
                   config={{
                     current: {

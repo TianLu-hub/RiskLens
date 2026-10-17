@@ -6,13 +6,14 @@ import {
   Activity,
   AlertTriangle,
   BrainCircuit,
-  Database,
   Info,
   ChevronDown,
   ShieldCheck,
 } from 'lucide-react';
 
 import { ConcentrationPanel } from '@/components/ConcentrationPanel';
+import { DataProvenance } from '@/components/DataProvenance';
+import { provenanceCopy } from '@/lib/data-provenance';
 import { CorrelationHeatmap } from '@/components/CorrelationHeatmap';
 import { DrawdownChart } from '@/components/DrawdownChart';
 import { FactorExposureChart } from '@/components/FactorExposureChart';
@@ -54,6 +55,7 @@ import type {
 
 export function RiskDashboard() {
   const { t, locale } = useLanguage();
+  const dataCopy = provenanceCopy[locale];
   const activeSection = useSyncExternalStore(
     subscribeToSection,
     getCurrentSection,
@@ -230,7 +232,13 @@ export function RiskDashboard() {
             <span
               className={`size-1.5 rounded-full ${mode === 'live' ? 'bg-emerald-400' : 'bg-amber-300'}`}
             />
-            {mode === 'live' ? t('HISTORICAL DATA') : t('DEMO SNAPSHOT')}
+            {activeSection === 'stress-testing'
+              ? dataCopy.stressBadge
+              : activeSection === 'optimization' || activeSection === 'backtest'
+                ? dataCopy.simulationBadge
+                : mode === 'live'
+                  ? t('HISTORICAL DATA')
+                  : t('DEMO SNAPSHOT')}
           </Badge>
         </div>
       </header>
@@ -350,11 +358,6 @@ export function RiskDashboard() {
                 {t(view.description)}
               </p>
             </div>
-            <div className="flex items-center gap-2 rounded border border-border bg-card px-3 py-2 text-xs text-muted-foreground">
-              <Database className="size-3.5 text-primary" />
-              {analysis.data_quality.start_date} —{' '}
-              {analysis.data_quality.end_date}
-            </div>
           </div>
           {(storageNotice || storageUnavailable) && (
             <output className="mb-3 block text-xs leading-5 text-muted-foreground">
@@ -365,20 +368,23 @@ export function RiskDashboard() {
                 : storageNotice && t(storageNotice)}
             </output>
           )}
-          {mode === 'snapshot' && (
-            <div className="mb-3 flex items-start gap-2 border border-amber-300/25 bg-amber-300/5 px-3 py-2.5 text-xs leading-5 text-amber-100">
-              <Info
-                className="mt-0.5 size-4 shrink-0 text-amber-300"
-                aria-hidden="true"
-              />
-              <p>
-                <span className="font-semibold">{t('Demo data.')}</span>{' '}
-                {t(
-                  'The charts below use a fixed synthetic example. Select a portfolio and click Analyze portfolio to load historical prices.',
-                )}
-              </p>
-            </div>
-          )}
+          {mode === 'snapshot' &&
+            (activeSection === 'overview' ||
+              activeSection === 'factor-exposure' ||
+              activeSection === 'risk-officer') && (
+              <div className="mb-3 flex items-start gap-2 border border-amber-300/25 bg-amber-300/5 px-3 py-2.5 text-xs leading-5 text-amber-100">
+                <Info
+                  className="mt-0.5 size-4 shrink-0 text-amber-300"
+                  aria-hidden="true"
+                />
+                <p>
+                  <span className="font-semibold">{t('Demo data.')}</span>{' '}
+                  {t(
+                    'The charts below use a fixed synthetic example. Select a portfolio and click Analyze portfolio to load historical prices.',
+                  )}
+                </p>
+              </div>
+            )}
           {inputsDirty && (
             <output className="mb-3 flex items-start gap-2 border border-primary/30 bg-primary/5 px-3 py-2.5 text-xs leading-5 text-foreground">
               <Info
@@ -413,6 +419,10 @@ export function RiskDashboard() {
           )}
 
           <div hidden={activeSection !== 'overview'}>
+            <DataProvenance
+              quality={analysis.data_quality}
+              demo={mode === 'snapshot'}
+            />
             <RiskOverview analysis={analysis} />
             <div className="mt-4 grid items-start gap-4 xl:grid-cols-[minmax(0,1.6fr)_minmax(310px,1fr)]">
               <div className="grid min-w-0 gap-4">
@@ -449,14 +459,25 @@ export function RiskDashboard() {
             </div>
           </div>
           <div hidden={activeSection !== 'factor-exposure'}>
+            <DataProvenance
+              quality={analysis.data_quality}
+              demo={mode === 'snapshot'}
+            />
             {activeSection === 'factor-exposure' && (
               <FactorExposureChart analysis={analysis} />
             )}
           </div>
           <div hidden={activeSection !== 'stress-testing'}>
+            <p className="mb-3 border border-amber-300/20 bg-amber-300/5 p-3 text-sm text-amber-200">
+              {dataCopy.stress}
+            </p>
             <StressTestPanel positions={positions} />
           </div>
           <div hidden={activeSection !== 'risk-officer'}>
+            <DataProvenance
+              quality={analysis.data_quality}
+              demo={mode === 'snapshot'}
+            />
             {inputsDirty ? (
               <output
                 id="risk-officer"
@@ -490,11 +511,6 @@ export function RiskDashboard() {
             />
           </div>
           <footer className="mt-5 flex flex-wrap items-center justify-between gap-2 border-t border-border py-3 text-xs text-muted-foreground">
-            <span className="flex items-center gap-2">
-              <Database className="size-3.5" />
-              {t(analysis.data_quality.source)} ·{' '}
-              {analysis.data_quality.observations} {t('observations')}
-            </span>
             <span>{t('Historical analysis · Hypothetical scenarios')}</span>
           </footer>
           {locale === 'zh' && (
@@ -502,14 +518,6 @@ export function RiskDashboard() {
               金额单位为美元。部分后端自由文本保留英文原文；语言切换不改变数据、计算结果或模型假设。
             </p>
           )}
-          {analysis.data_quality.warnings.map((warning) => (
-            <p
-              key={warning}
-              className="mt-1 text-xs leading-5 text-amber-200/80"
-            >
-              {t('Data note:')} {t(warning)}
-            </p>
-          ))}
         </div>
       </div>
     </main>
