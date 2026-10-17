@@ -46,8 +46,8 @@ export function PortfolioEditor({
   }
 
   return (
-    <div className="flex h-full flex-col" aria-busy={isLoading}>
-      <div className="border-b border-border p-4">
+    <div className="flex flex-col" aria-busy={isLoading}>
+      <div className="border-b border-border px-4 py-3">
         <label className="section-label" htmlFor="portfolio-preset">Portfolio</label>
         <NativeSelect
           className="mt-2 w-full"
@@ -62,7 +62,7 @@ export function PortfolioEditor({
         </NativeSelect>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto">
+      <div className="max-h-80 overflow-y-auto">
         <div className="grid grid-cols-[1fr_72px_28px] gap-2 border-b border-border px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
           <span>Instrument</span><span className="text-right">Weight</span><span />
         </div>
@@ -72,7 +72,7 @@ export function PortfolioEditor({
               value={position.ticker}
               disabled={isLoading}
               onChange={(event) => updatePosition(index, { ticker: event.target.value.toUpperCase() })}
-              className="h-7 rounded-sm border-transparent bg-transparent px-1 font-mono text-xs font-semibold hover:border-input focus:border-ring"
+              className="h-8 rounded border-transparent bg-transparent px-1 font-mono text-sm font-semibold hover:border-input focus:border-ring"
               aria-label={`Ticker ${index + 1}`}
             />
             <div className="relative">
@@ -84,7 +84,7 @@ export function PortfolioEditor({
                 value={Number((position.weight * 100).toFixed(4))}
                 disabled={isLoading}
                 onChange={(event) => updatePosition(index, { weight: Math.max(0, Number(event.target.value) / 100) })}
-                className="h-7 rounded-sm pr-5 text-right font-mono text-xs"
+                className="h-8 rounded pr-5 text-right font-mono text-sm"
                 aria-label={`${position.ticker || `Position ${index + 1}`} weight percent`}
               />
               <span className="pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2 text-[12px] text-muted-foreground">%</span>
@@ -116,7 +116,7 @@ export function PortfolioEditor({
           <span className={isValid ? 'font-mono text-emerald-300' : 'font-mono text-amber-300'}>{(total * 100).toFixed(2)}% · {isValid ? 'Valid' : 'Review'}</span>
         </div>
         <div className="mt-1.5 h-1 overflow-hidden bg-muted"><div className={isValid ? 'h-full bg-emerald-400' : 'h-full bg-amber-400'} style={{ width: `${Math.min(total * 100, 100)}%` }} /></div>
-        <Button className="mt-3 w-full rounded-sm" size="sm" disabled={!isValid || isLoading} onClick={onAnalyze}>
+        <Button className="mt-3 h-10 w-full rounded font-semibold" size="sm" disabled={!isValid || isLoading} onClick={onAnalyze}>
           {isLoading ? <><LoaderCircle className="animate-spin" /> Calculating…</> : 'Analyze portfolio'}
         </Button>
       </div>

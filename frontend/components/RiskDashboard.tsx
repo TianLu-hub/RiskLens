@@ -1,20 +1,14 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import {
   Activity,
   AlertTriangle,
-  BarChart3,
   BrainCircuit,
-  ChartSpline,
   Database,
-  FlaskConical,
-  Grid3X3,
-  LineChart,
-  History,
   Info,
-  SlidersHorizontal,
-  Sparkles,
+  ChevronDown,
+  ShieldCheck,
 } from 'lucide-react';
 
 import { ConcentrationPanel } from '@/components/ConcentrationPanel';
@@ -27,17 +21,29 @@ import { PortfolioEditor } from '@/components/PortfolioEditor';
 import { RiskContributionChart } from '@/components/RiskContributionChart';
 import { RiskFlags } from '@/components/RiskFlags';
 import { RiskOfficer } from '@/components/RiskOfficer';
-import { RiskOverview } from '@/components/RiskOverview';
+import { RiskOverview, PortfolioPerformance } from '@/components/RiskOverview';
 import { StressTestPanel } from '@/components/StressTestPanel';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
+import { WorkspaceNav, workspaceViews } from '@/components/WorkspaceNav';
+import {
+  getCurrentSection,
+  getServerSection,
+  subscribeToSection,
+  navigateToSection,
+} from '@/lib/workspace-navigation';
 import { Input } from '@/components/ui/input';
 import {
   NativeSelect,
   NativeSelectOption,
 } from '@/components/ui/native-select';
 import { analyzePortfolio } from '@/lib/api';
-import { analysisInputKey, parseSavedPortfolio, PORTFOLIO_STORAGE_KEY, savePortfolio } from '@/lib/portfolio-state';
+import {
+  analysisInputKey,
+  parseSavedPortfolio,
+  PORTFOLIO_STORAGE_KEY,
+  savePortfolio,
+} from '@/lib/portfolio-state';
 import { DEMO_ANALYSIS, DEMO_PORTFOLIOS } from '@/lib/demo-data';
 import type {
   DemoPortfolioName,
@@ -45,39 +51,15 @@ import type {
   PositionInput,
 } from '@/lib/types';
 
-const navItems = [
-  { label: 'Risk Overview', href: '#overview', icon: BarChart3, ready: true },
-  {
-    label: 'Risk Contribution',
-    href: '#contribution',
-    icon: ChartSpline,
-    ready: true,
-  },
-  { label: 'Correlation', href: '#correlation', icon: Grid3X3, ready: true },
-  { label: 'Drawdown', href: '#drawdown', icon: LineChart, ready: true },
-  {
-    label: 'Factor Exposure',
-    href: '#factor-exposure',
-    icon: Activity,
-    ready: true,
-  },
-  {
-    label: 'Stress Testing',
-    href: '#stress-testing',
-    icon: FlaskConical,
-    ready: true,
-  },
-  {
-    label: 'AI Risk Officer',
-    href: '#risk-officer',
-    icon: BrainCircuit,
-    ready: true,
-  },
-  { label: 'Optimization', href: '#optimization', icon: SlidersHorizontal, ready: true },
-  { label: 'Walk-Forward Test', href: '#backtest', icon: History, ready: true },
-];
-
 export function RiskDashboard() {
+  const activeSection = useSyncExternalStore(
+    subscribeToSection,
+    getCurrentSection,
+    getServerSection,
+  );
+  const view = workspaceViews.find((item) => item.id === activeSection)!;
+  const [portfolioOpen, setPortfolioOpen] = useState(false);
+  const [analysisRevision, setAnalysisRevision] = useState(0);
   const [positions, setPositions] = useState<PositionInput[]>(() =>
     DEMO_PORTFOLIOS['Mega-Cap Tech'].map((position) => ({ ...position })),
   );
@@ -88,13 +70,19 @@ export function RiskDashboard() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [mode, setMode] = useState<'snapshot' | 'live'>('snapshot');
-  const [analyzedInputKey, setAnalyzedInputKey] = useState(() => analysisInputKey({
-    positions: DEMO_PORTFOLIOS['Mega-Cap Tech'], lookbackYears: 3, riskFreeRate: 0.04,
-  }));
+  const [analyzedInputKey, setAnalyzedInputKey] = useState(() =>
+    analysisInputKey({
+      positions: DEMO_PORTFOLIOS['Mega-Cap Tech'],
+      lookbackYears: 3,
+      riskFreeRate: 0.04,
+    }),
+  );
   const [storageReady, setStorageReady] = useState(false);
   const [storageNotice, setStorageNotice] = useState<string | null>(null);
   const [storageUnavailable, setStorageUnavailable] = useState(false);
-  const inputsDirty = analysisInputKey({ positions, lookbackYears, riskFreeRate }) !== analyzedInputKey;
+  const inputsDirty =
+    analysisInputKey({ positions, lookbackYears, riskFreeRate }) !==
+    analyzedInputKey;
 
   // Browser storage is an external system unavailable during server rendering.
   // Hydrate once after mount; gate writes so defaults cannot overwrite saved inputs.
@@ -109,9 +97,13 @@ export function RiskDashboard() {
           setLookbackYears(saved.lookbackYears);
           setRiskFreeRate(saved.riskFreeRate);
           setPreset('Custom');
-          setStorageNotice('Saved portfolio restored on this device. Analyze it to load historical results.');
+          setStorageNotice(
+            'Saved portfolio restored on this device. Analyze it to load historical results.',
+          );
         } else {
-          setStorageNotice('Saved portfolio could not be restored. The default portfolio is shown.');
+          setStorageNotice(
+            'Saved portfolio could not be restored. The default portfolio is shown.',
+          );
         }
       }
     } catch {
@@ -123,7 +115,13 @@ export function RiskDashboard() {
   useEffect(() => {
     if (!storageReady) return;
     try {
-      setStorageUnavailable(!savePortfolio(window.localStorage, { positions, lookbackYears, riskFreeRate }));
+      setStorageUnavailable(
+        !savePortfolio(window.localStorage, {
+          positions,
+          lookbackYears,
+          riskFreeRate,
+        }),
+      );
     } catch {
       setStorageUnavailable(true);
     }
@@ -173,8 +171,15 @@ export function RiskDashboard() {
       });
       setPositions(cleanPositions);
       setAnalysis(result);
+      setAnalysisRevision((revision) => revision + 1);
       setMode('live');
-      setAnalyzedInputKey(analysisInputKey({ positions: cleanPositions, lookbackYears, riskFreeRate }));
+      setAnalyzedInputKey(
+        analysisInputKey({
+          positions: cleanPositions,
+          lookbackYears,
+          riskFreeRate,
+        }),
+      );
       setStorageNotice(null);
     } catch (reason) {
       setError(
@@ -188,75 +193,35 @@ export function RiskDashboard() {
   }
 
   return (
-    <main className="min-h-screen bg-background text-foreground">
-      <header className="sticky top-0 z-30 flex h-14 items-center justify-between border-b border-border bg-background/95 px-3 backdrop-blur md:px-5">
+    <main className="risk-workspace min-h-screen bg-background text-foreground">
+      <a
+        href="#workspace-content"
+        onClick={(event) => {
+          event.preventDefault();
+          document.getElementById('workspace-content')?.focus();
+        }}
+        className="sr-only z-50 bg-primary p-3 text-primary-foreground focus:not-sr-only focus:fixed focus:left-3 focus:top-3"
+      >
+        Skip to analysis
+      </a>
+      <header className="sticky top-0 z-30 flex h-16 items-center justify-between gap-3 border-b border-border bg-background px-4 lg:px-5">
         <div className="flex items-center gap-3">
-          <div className="grid size-8 place-items-center border border-primary/35 bg-primary/10 text-primary">
-            <Activity className="size-4" />
-          </div>
-          <div>
-            <div className="flex items-baseline gap-2">
-              <span className="text-sm font-semibold tracking-[0.12em]">
-                RISKLENS
-              </span>
-              <span className="hidden text-[11px] tracking-[0.13em] text-muted-foreground sm:inline">
-                AI PORTFOLIO RISK TERMINAL
-              </span>
-            </div>
-            <p className="text-[11px] text-muted-foreground">
-              PORTFOLIO / MAIN / ANALYTICS
-            </p>
-          </div>
+          <Activity className="size-7 text-primary" aria-hidden="true" />
+          <span className="text-xl font-semibold tracking-tight">RiskLens</span>
+          <span className="hidden border-l border-border pl-3 text-xs text-muted-foreground sm:block">
+            PORTFOLIO RISK TERMINAL
+          </span>
         </div>
-        <div className="flex items-center gap-2 md:gap-4">
-          <div className="hidden items-center gap-2 lg:flex">
-            <span className="text-[11px] uppercase tracking-wider text-muted-foreground">
-              Lookback
-            </span>
-            <NativeSelect
-              size="sm"
-              value={lookbackYears}
-              disabled={isLoading}
-              onChange={(event) => {
-                setLookbackYears(Number(event.target.value));
-                setStorageNotice(null);
-              }}
-              aria-label="Lookback period"
-            >
-              <NativeSelectOption value="1">1 year</NativeSelectOption>
-              <NativeSelectOption value="3">3 years</NativeSelectOption>
-              <NativeSelectOption value="5">5 years</NativeSelectOption>
-            </NativeSelect>
-          </div>
-          <div className="hidden items-center gap-2 lg:flex">
-            <span className="text-[11px] uppercase tracking-wider text-muted-foreground">
-              Risk-free
-            </span>
-            <div className="relative w-16">
-              <Input
-                type="number"
-                min="-10"
-                max="50"
-                step="0.1"
-                value={Number((riskFreeRate * 100).toFixed(2))}
-                disabled={isLoading}
-                onChange={(event) => {
-                  setRiskFreeRate(Number(event.target.value) / 100);
-                  setStorageNotice(null);
-                }}
-                className="h-7 rounded-sm pr-5 text-right font-mono text-xs"
-                aria-label="Annual risk-free rate percent"
-              />
-              <span className="pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2 text-[11px] text-muted-foreground">
-                %
-              </span>
-            </div>
-          </div>
+        <div className="flex items-center gap-3">
+          <span className="hidden items-center gap-1.5 text-xs text-muted-foreground md:flex">
+            <ShieldCheck className="size-3.5 text-emerald-300" />
+            Python-computed metrics
+          </span>
           <Badge
             className={
               mode === 'live'
-                ? 'rounded-sm border-emerald-400/20 bg-emerald-400/10 text-emerald-300'
-                : 'rounded-sm border-amber-300/20 bg-amber-300/10 text-amber-200'
+                ? 'rounded border-emerald-400/20 bg-emerald-400/10 text-emerald-300'
+                : 'rounded border-amber-300/20 bg-amber-300/10 text-amber-200'
             }
           >
             <span
@@ -267,129 +232,156 @@ export function RiskDashboard() {
         </div>
       </header>
 
-      <nav
-        className="flex gap-1 overflow-x-auto border-b border-border bg-sidebar px-3 py-2 lg:hidden"
-        aria-label="Jump to risk sections"
-      >
-        {navItems.map((item) => {
-          const Icon = item.icon;
-          return (
-            <a
-              key={item.label}
-              href={item.href}
-              className="flex shrink-0 items-center gap-1.5 rounded-sm border border-border px-2.5 py-1.5 text-xs text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
-            >
-              <Icon className="size-3.5" aria-hidden="true" />
-              {item.label}
-            </a>
-          );
-        })}
-      </nav>
-
-      <div className="grid min-h-[calc(100vh-3.5rem)] grid-cols-1 xl:grid-cols-[264px_minmax(0,1fr)]">
-        <aside className="border-b border-border bg-sidebar xl:sticky xl:top-14 xl:h-[calc(100vh-3.5rem)] xl:border-r xl:border-b-0">
-          <div className="grid grid-cols-2 gap-3 border-b border-border p-3 lg:hidden">
-            <div>
-              <label htmlFor="mobile-lookback" className="section-label">Lookback</label>
-              <NativeSelect
-                id="mobile-lookback"
-                className="mt-1 w-full"
-                size="sm"
-                value={lookbackYears}
-                disabled={isLoading}
-                onChange={(event) => {
-                  setLookbackYears(Number(event.target.value));
-                  setStorageNotice(null);
-                }}
-              >
-                <NativeSelectOption value="1">1 year</NativeSelectOption>
-                <NativeSelectOption value="3">3 years</NativeSelectOption>
-                <NativeSelectOption value="5">5 years</NativeSelectOption>
-              </NativeSelect>
-            </div>
-            <div>
-              <label htmlFor="mobile-risk-free" className="section-label">Risk-free rate</label>
-              <div className="relative mt-1">
-                <Input
-                  id="mobile-risk-free"
-                  type="number"
-                  min="-10"
-                  max="50"
-                  step="0.1"
-                  value={Number((riskFreeRate * 100).toFixed(2))}
+      <div className="grid min-h-[calc(100dvh-4rem)] lg:grid-cols-[260px_minmax(0,1fr)]">
+        <aside
+          aria-label="Portfolio workspace"
+          className="min-w-0 border-b border-border bg-sidebar lg:sticky lg:top-16 lg:h-[calc(100dvh-4rem)] lg:overflow-y-auto lg:border-r lg:border-b-0"
+        >
+          <WorkspaceNav active={activeSection} />
+          <button
+            type="button"
+            className="flex w-full items-center justify-between px-4 py-3 text-sm lg:hidden"
+            aria-expanded={portfolioOpen}
+            aria-controls="portfolio-controls"
+            onClick={() => setPortfolioOpen(!portfolioOpen)}
+          >
+            <span>Portfolio · {positions.length} positions</span>
+            <ChevronDown
+              className={`size-4 transition-transform ${portfolioOpen ? 'rotate-180' : ''}`}
+            />
+          </button>
+          <div
+            id="portfolio-controls"
+            className={portfolioOpen ? 'block' : 'hidden lg:block'}
+          >
+            <div className="grid grid-cols-2 gap-3 border-b border-border px-4 py-3">
+              <div>
+                <label
+                  htmlFor="analysis-lookback"
+                  className="text-xs text-muted-foreground"
+                >
+                  Lookback
+                </label>
+                <NativeSelect
+                  id="analysis-lookback"
+                  className="mt-1 w-full"
+                  size="sm"
+                  value={lookbackYears}
                   disabled={isLoading}
                   onChange={(event) => {
-                    setRiskFreeRate(Number(event.target.value) / 100);
+                    setLookbackYears(Number(event.target.value));
                     setStorageNotice(null);
                   }}
-                  className="h-8 rounded-sm pr-6 text-right font-mono text-sm"
-                />
-                <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">%</span>
+                >
+                  <NativeSelectOption value="1">1 year</NativeSelectOption>
+                  <NativeSelectOption value="3">3 years</NativeSelectOption>
+                  <NativeSelectOption value="5">5 years</NativeSelectOption>
+                </NativeSelect>
+              </div>
+              <div>
+                <label
+                  htmlFor="analysis-risk-free"
+                  className="text-xs text-muted-foreground"
+                >
+                  Risk-free rate
+                </label>
+                <div className="relative mt-1">
+                  <Input
+                    id="analysis-risk-free"
+                    type="number"
+                    min="-10"
+                    max="50"
+                    step="0.1"
+                    value={Number((riskFreeRate * 100).toFixed(2))}
+                    disabled={isLoading}
+                    onChange={(event) => {
+                      setRiskFreeRate(Number(event.target.value) / 100);
+                      setStorageNotice(null);
+                    }}
+                    className="h-8 rounded pr-6 font-mono text-sm"
+                  />
+                  <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
+                    %
+                  </span>
+                </div>
               </div>
             </div>
-          </div>
-          <div className="grid lg:grid-cols-[264px_1fr] xl:block xl:h-full">
-            <div className="xl:h-[calc(100%-236px)]">
-              <PortfolioEditor
-                positions={positions}
-                preset={preset}
-                onPresetChange={setPreset}
-                onChange={updatePositions}
-                onAnalyze={runAnalysis}
-                isLoading={isLoading}
-              />
-            </div>
-            <nav
-              className="hidden border-t border-border p-2 lg:block"
-              aria-label="Risk sections"
-            >
-              <p className="section-label px-2 pb-2 pt-1">Terminal</p>
-              <div className="grid grid-cols-2 gap-1 xl:grid-cols-1">
-                {navItems.map((item) => {
-                  const Icon = item.icon;
-                  return (
-                    <a
-                      key={item.label}
-                      href={item.href}
-                      aria-disabled={!item.ready}
-                      className={`flex items-center gap-2 rounded-sm px-2 py-1.5 text-[12px] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary ${item.ready ? 'text-muted-foreground hover:bg-accent hover:text-foreground' : 'cursor-not-allowed text-muted-foreground/45'}`}
-                      onClick={(event) =>
-                        !item.ready &&
-                        item.href === '#' &&
-                        event.preventDefault()
-                      }
-                    >
-                      <Icon className="size-3.5" />
-                      <span>{item.label}</span>
-                      {!item.ready && (
-                        <span className="ml-auto font-mono text-[11px]">
-                          LATER
-                        </span>
-                      )}
-                    </a>
-                  );
-                })}
-              </div>
-            </nav>
+            <PortfolioEditor
+              positions={positions}
+              preset={preset}
+              onPresetChange={setPreset}
+              onChange={updatePositions}
+              onAnalyze={runAnalysis}
+              isLoading={isLoading}
+            />
+            <p className="px-4 py-3 text-xs leading-5 text-muted-foreground">
+              Holdings stay in this browser.
+              <br />
+              Analyze to update historical results.
+            </p>
           </div>
         </aside>
 
-        <div className="min-w-0 p-3 md:p-4">
+        <div
+          id="workspace-content"
+          className="min-w-0 p-4 lg:p-5"
+          tabIndex={-1}
+        >
+          <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
+            <div>
+              <p className="mb-1 text-xs font-medium uppercase tracking-widest text-primary">
+                Main portfolio / Research workspace
+              </p>
+              <h1 className="text-2xl font-semibold tracking-tight">
+                {view.title}
+              </h1>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {view.description}
+              </p>
+            </div>
+            <div className="flex items-center gap-2 rounded border border-border bg-card px-3 py-2 text-xs text-muted-foreground">
+              <Database className="size-3.5 text-primary" />
+              {analysis.data_quality.start_date} —{' '}
+              {analysis.data_quality.end_date}
+            </div>
+          </div>
           {(storageNotice || storageUnavailable) && (
             <output className="mb-3 block text-xs leading-5 text-muted-foreground">
-              {storageUnavailable ? 'Portfolio could not be saved on this device. You can still run analyses.' : storageNotice}
+              {storageUnavailable
+                ? 'Portfolio could not be saved on this device. You can still run analyses.'
+                : storageNotice}
             </output>
           )}
           {mode === 'snapshot' && (
             <div className="mb-3 flex items-start gap-2 border border-amber-300/25 bg-amber-300/5 px-3 py-2.5 text-xs leading-5 text-amber-100">
-              <Info className="mt-0.5 size-4 shrink-0 text-amber-300" aria-hidden="true" />
-              <p><span className="font-semibold">Demo data.</span> The charts below use a fixed synthetic example. Select a portfolio and click Analyze portfolio to load historical prices.</p>
+              <Info
+                className="mt-0.5 size-4 shrink-0 text-amber-300"
+                aria-hidden="true"
+              />
+              <p>
+                <span className="font-semibold">Demo data.</span> The charts
+                below use a fixed synthetic example. Select a portfolio and
+                click Analyze portfolio to load historical prices.
+              </p>
             </div>
           )}
           {inputsDirty && (
             <output className="mb-3 flex items-start gap-2 border border-primary/30 bg-primary/5 px-3 py-2.5 text-xs leading-5 text-foreground">
-              <Info className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden="true" />
-              <p><span className="font-semibold">Inputs changed — analysis needs updating.</span> The risk charts still show {mode === 'snapshot' ? 'the demo portfolio' : 'the last analyzed portfolio'}. Click Analyze portfolio to refresh them. Stress testing, optimization, and backtesting use your current inputs.</p>
+              <Info
+                className="mt-0.5 size-4 shrink-0 text-primary"
+                aria-hidden="true"
+              />
+              <p>
+                <span className="font-semibold">
+                  Inputs changed — analysis needs updating.
+                </span>{' '}
+                The risk charts still show{' '}
+                {mode === 'snapshot'
+                  ? 'the demo portfolio'
+                  : 'the last analyzed portfolio'}
+                . Click Analyze portfolio to refresh them. Stress testing,
+                optimization, and backtesting use your current inputs.
+              </p>
             </output>
           )}
           {error && (
@@ -397,66 +389,102 @@ export function RiskDashboard() {
               <AlertTriangle />
               <AlertTitle>Analysis unavailable</AlertTitle>
               <AlertDescription>
-                {error} {mode === 'snapshot' ? 'The labeled demo snapshot remains visible.' : 'The previous historical analysis remains visible.'}
+                {error}{' '}
+                {mode === 'snapshot'
+                  ? 'The labeled demo snapshot remains visible.'
+                  : 'The previous historical analysis remains visible.'}
               </AlertDescription>
             </Alert>
           )}
-          <RiskOverview analysis={analysis} />
-          <div className="mt-3 grid gap-3 2xl:grid-cols-2">
-            <CorrelationHeatmap analysis={analysis} />
-            <RiskContributionChart analysis={analysis} />
-          </div>
-          <div className="mt-3 grid gap-3 xl:grid-cols-[1.25fr_0.75fr]">
-            <DrawdownChart analysis={analysis} />
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
+
+          <div hidden={activeSection !== 'overview'}>
+            <RiskOverview analysis={analysis} />
+            <div className="mt-4 grid items-start gap-4 xl:grid-cols-[minmax(0,1.6fr)_minmax(310px,1fr)]">
+              <div className="grid min-w-0 gap-4">
+                {activeSection === 'overview' && (
+                  <PortfolioPerformance analysis={analysis} />
+                )}
+                {activeSection === 'overview' && (
+                  <DrawdownChart analysis={analysis} />
+                )}
+              </div>
+              <div className="grid min-w-0 gap-4">
+                <RiskContributionChart analysis={analysis} />
+                <RiskFlags analysis={analysis} />
+                <button
+                  type="button"
+                  className="flex items-center gap-3 rounded-md border border-primary/25 bg-primary/5 p-4 text-left hover:bg-primary/10 focus-visible:outline-2 focus-visible:outline-primary"
+                  onClick={() => navigateToSection('risk-officer')}
+                >
+                  <BrainCircuit className="size-5 shrink-0 text-primary" />
+                  <span>
+                    <span className="block text-sm font-semibold">
+                      Explore with Risk Officer
+                    </span>
+                    <span className="mt-1 block text-xs text-muted-foreground">
+                      Understand the risks behind these numbers →
+                    </span>
+                  </span>
+                </button>
+              </div>
+            </div>
+            <div className="mt-4 grid items-start gap-4 xl:grid-cols-[minmax(0,1.6fr)_minmax(310px,1fr)]">
+              <CorrelationHeatmap analysis={analysis} />
               <ConcentrationPanel analysis={analysis} />
-              <RiskFlags analysis={analysis} />
             </div>
           </div>
-          <div className="mt-3">
-            <FactorExposureChart analysis={analysis} />
-          </div>
-          <div className="mt-3">
-            <StressTestPanel positions={positions} />
-          </div>
-          <div className="mt-3">
-            {inputsDirty ? (
-              <output id="risk-officer" className="block border border-primary/30 bg-card p-4 text-sm">
-                <p className="font-semibold">Risk Officer needs an updated analysis</p>
-                <p className="mt-1 text-muted-foreground">Analyze the current portfolio before asking about its risks.</p>
-              </output>
-            ) : (
-              <RiskOfficer key={analyzedInputKey + mode} analysis={analysis} />
+          <div hidden={activeSection !== 'factor-exposure'}>
+            {activeSection === 'factor-exposure' && (
+              <FactorExposureChart analysis={analysis} />
             )}
           </div>
-          <div className="mt-3">
-            <OptimizationPanel positions={positions} lookbackYears={lookbackYears} riskFreeRate={riskFreeRate} />
+          <div hidden={activeSection !== 'stress-testing'}>
+            <StressTestPanel positions={positions} />
           </div>
-          <div className="mt-3">
-            <BacktestPanel positions={positions} lookbackYears={lookbackYears} riskFreeRate={riskFreeRate} />
+          <div hidden={activeSection !== 'risk-officer'}>
+            {inputsDirty ? (
+              <output
+                id="risk-officer"
+                className="block rounded-md border border-primary/30 bg-card p-5 text-sm"
+              >
+                <p className="font-semibold">
+                  Risk Officer needs an updated analysis
+                </p>
+                <p className="mt-2 text-muted-foreground">
+                  Analyze the current portfolio before asking about its risks.
+                </p>
+              </output>
+            ) : (
+              <RiskOfficer key={analysisRevision + mode} analysis={analysis} />
+            )}
           </div>
-
-          <footer className="mt-3 flex flex-col gap-2 border border-border bg-card px-3 py-2 text-[11px] text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-center gap-2">
-              <Database className="size-3 text-primary" />
-              <span>{analysis.data_quality.source}</span>
-              <span>·</span>
-              <span>
-                {analysis.data_quality.start_date} —{' '}
-                {analysis.data_quality.end_date}
-              </span>
-              <span>·</span>
-              <span>{analysis.data_quality.observations} observations</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <Sparkles className="size-3" />
-              <span>
-                All displayed metrics are calculated deterministically.
-              </span>
-            </div>
+          <div hidden={activeSection !== 'optimization'}>
+            <OptimizationPanel
+              positions={positions}
+              lookbackYears={lookbackYears}
+              riskFreeRate={riskFreeRate}
+            />
+          </div>
+          <div hidden={activeSection !== 'backtest'}>
+            <BacktestPanel
+              positions={positions}
+              lookbackYears={lookbackYears}
+              riskFreeRate={riskFreeRate}
+            />
+          </div>
+          <footer className="mt-5 flex flex-wrap items-center justify-between gap-2 border-t border-border py-3 text-xs text-muted-foreground">
+            <span className="flex items-center gap-2">
+              <Database className="size-3.5" />
+              {analysis.data_quality.source} ·{' '}
+              {analysis.data_quality.observations} observations
+            </span>
+            <span>Historical analysis · Hypothetical scenarios</span>
           </footer>
           {analysis.data_quality.warnings.map((warning) => (
-            <p key={warning} className="mt-2 text-[11px] text-amber-200/75">
+            <p
+              key={warning}
+              className="mt-1 text-xs leading-5 text-amber-200/80"
+            >
               Data note: {warning}
             </p>
           ))}

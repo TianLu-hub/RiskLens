@@ -8,15 +8,28 @@ type Props = {
   tone?: 'default' | 'negative';
 };
 
-export function RiskMetricCard({ label, value, detail, icon: Icon, tone = 'default' }: Props) {
+export function RiskMetricCard({
+  label,
+  value,
+  detail,
+  icon: Icon,
+  tone = 'default',
+}: Props) {
   return (
-    <div className="bg-card px-3 py-3.5">
+    <div className="min-w-0 bg-card px-3 py-4">
       <div className="flex items-start justify-between gap-2">
-        <p className="text-[9px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">{label}</p>
-        <Icon className="size-3 text-muted-foreground" />
+        <p className="text-xs font-medium text-muted-foreground">{label}</p>
+        <Icon
+          className="size-3.5 shrink-0 text-muted-foreground"
+          aria-hidden="true"
+        />
       </div>
-      <p className={`mt-2 font-mono text-xl font-medium tabular-nums ${tone === 'negative' ? 'text-rose-300' : ''}`}>{value}</p>
-      <p className="mt-1 text-[10px] text-muted-foreground">{detail}</p>
+      <p
+        className={`mt-2 font-mono text-2xl font-semibold tracking-tight tabular-nums ${tone === 'negative' ? 'text-rose-300' : ''}`}
+      >
+        {value}
+      </p>
+      <p className="mt-1 text-[12px] text-muted-foreground">{detail}</p>
     </div>
   );
 }
