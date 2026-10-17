@@ -23,6 +23,8 @@ RiskLens 是面向股票与 ETF 投资组合的全栈风险分析项目。用户
 
 默认组合：**AAPL 20% · MSFT 20% · NVDA 15% · SPY 25% · TLT 20%**。
 
+持仓编辑、回看年限和无风险利率会保存在当前浏览器，刷新后自动恢复。分析结果不会保存，需点击 **Analyze portfolio** 重新获取历史行情。修改输入后会提示更新分析，风险官会等待新分析完成后再解释当前组合。保存记录仅属于当前设备和浏览器；浏览器存储不可用时仍可运行分析。
+
 ## 系统架构
 
 ```mermaid
@@ -187,6 +189,7 @@ cd backend
 
 cd ../frontend
 pnpm lint
+pnpm test
 pnpm build
 ```
 

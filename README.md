@@ -23,6 +23,8 @@ RiskLens is a full-stack, desktop-first risk dashboard for stock and ETF portfol
 
 Default portfolio: **AAPL 20% · MSFT 20% · NVDA 15% · SPY 25% · TLT 20%**.
 
+Portfolio edits, lookback, and risk-free rate are saved in this browser and restored on refresh. Results are not saved: click **Analyze portfolio** to load historical data. Changed inputs are flagged until a matching analysis completes; the Risk Officer asks for an updated analysis before interpreting the new portfolio. Storage is device/browser-specific, and analysis still works when browser storage is unavailable.
+
 ## Architecture
 
 ```mermaid
@@ -187,6 +189,7 @@ cd backend
 
 cd ../frontend
 pnpm lint
+pnpm test
 pnpm build
 ```
 

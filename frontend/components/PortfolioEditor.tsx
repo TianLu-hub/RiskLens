@@ -36,8 +36,8 @@ export function PortfolioEditor({
   }
 
   function selectPreset(nextPreset: DemoPortfolioName) {
-    onPresetChange(nextPreset);
     onChange(DEMO_PORTFOLIOS[nextPreset].map((position) => ({ ...position })));
+    onPresetChange(nextPreset);
   }
 
   function normalize() {
@@ -63,11 +63,11 @@ export function PortfolioEditor({
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto">
-        <div className="grid grid-cols-[1fr_72px_28px] gap-2 border-b border-border px-3 py-2 text-[9px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
+        <div className="grid grid-cols-[1fr_72px_28px] gap-2 border-b border-border px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
           <span>Instrument</span><span className="text-right">Weight</span><span />
         </div>
         {positions.map((position, index) => (
-          <div key={`${index}-${position.ticker}`} className="grid grid-cols-[1fr_72px_28px] items-center gap-2 border-b border-border px-3 py-2">
+          <div key={index} className="grid grid-cols-[1fr_72px_28px] items-center gap-2 border-b border-border px-3 py-2">
             <Input
               value={position.ticker}
               disabled={isLoading}
@@ -87,7 +87,7 @@ export function PortfolioEditor({
                 className="h-7 rounded-sm pr-5 text-right font-mono text-xs"
                 aria-label={`${position.ticker || `Position ${index + 1}`} weight percent`}
               />
-              <span className="pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground">%</span>
+              <span className="pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2 text-[12px] text-muted-foreground">%</span>
             </div>
             <Button
               size="icon-xs"
@@ -111,7 +111,7 @@ export function PortfolioEditor({
           ><Plus /> Position</Button>
           <Button size="sm" variant="outline" className="rounded-sm" onClick={normalize} disabled={isLoading || total <= 0}><Scale /> Normalize</Button>
         </div>
-        <div className="mt-3 flex items-center justify-between text-[10px] uppercase tracking-wider text-muted-foreground">
+        <div className="mt-3 flex items-center justify-between text-[12px] uppercase tracking-wider text-muted-foreground">
           <span>Total weight</span>
           <span className={isValid ? 'font-mono text-emerald-300' : 'font-mono text-amber-300'}>{(total * 100).toFixed(2)}% · {isValid ? 'Valid' : 'Review'}</span>
         </div>

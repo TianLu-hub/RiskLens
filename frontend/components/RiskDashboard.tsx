@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   Activity,
   AlertTriangle,
@@ -12,6 +12,7 @@ import {
   Grid3X3,
   LineChart,
   History,
+  Info,
   SlidersHorizontal,
   Sparkles,
 } from 'lucide-react';
@@ -36,6 +37,7 @@ import {
   NativeSelectOption,
 } from '@/components/ui/native-select';
 import { analyzePortfolio } from '@/lib/api';
+import { analysisInputKey, parseSavedPortfolio, PORTFOLIO_STORAGE_KEY, savePortfolio } from '@/lib/portfolio-state';
 import { DEMO_ANALYSIS, DEMO_PORTFOLIOS } from '@/lib/demo-data';
 import type {
   DemoPortfolioName,
@@ -86,6 +88,47 @@ export function RiskDashboard() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [mode, setMode] = useState<'snapshot' | 'live'>('snapshot');
+  const [analyzedInputKey, setAnalyzedInputKey] = useState(() => analysisInputKey({
+    positions: DEMO_PORTFOLIOS['Mega-Cap Tech'], lookbackYears: 3, riskFreeRate: 0.04,
+  }));
+  const [storageReady, setStorageReady] = useState(false);
+  const [storageNotice, setStorageNotice] = useState<string | null>(null);
+  const [storageUnavailable, setStorageUnavailable] = useState(false);
+  const inputsDirty = analysisInputKey({ positions, lookbackYears, riskFreeRate }) !== analyzedInputKey;
+
+  // Browser storage is an external system unavailable during server rendering.
+  // Hydrate once after mount; gate writes so defaults cannot overwrite saved inputs.
+  /* eslint-disable react/react-compiler */
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem(PORTFOLIO_STORAGE_KEY);
+      if (raw) {
+        const saved = parseSavedPortfolio(raw);
+        if (saved) {
+          setPositions(saved.positions);
+          setLookbackYears(saved.lookbackYears);
+          setRiskFreeRate(saved.riskFreeRate);
+          setPreset('Custom');
+          setStorageNotice('Saved portfolio restored on this device. Analyze it to load historical results.');
+        } else {
+          setStorageNotice('Saved portfolio could not be restored. The default portfolio is shown.');
+        }
+      }
+    } catch {
+      setStorageUnavailable(true);
+    }
+    setStorageReady(true);
+  }, []);
+
+  useEffect(() => {
+    if (!storageReady) return;
+    try {
+      setStorageUnavailable(!savePortfolio(window.localStorage, { positions, lookbackYears, riskFreeRate }));
+    } catch {
+      setStorageUnavailable(true);
+    }
+  }, [positions, lookbackYears, riskFreeRate, storageReady]);
+  /* eslint-enable react/react-compiler */
 
   const totalWeight = useMemo(
     () => positions.reduce((sum, position) => sum + position.weight, 0),
@@ -94,6 +137,7 @@ export function RiskDashboard() {
 
   function updatePositions(next: PositionInput[]) {
     setPositions(next);
+    setStorageNotice(null);
     if (preset !== 'Custom') setPreset('Custom');
   }
 
@@ -130,10 +174,8 @@ export function RiskDashboard() {
       setPositions(cleanPositions);
       setAnalysis(result);
       setMode('live');
-      window.localStorage.setItem(
-        'risklens-portfolio',
-        JSON.stringify(cleanPositions),
-      );
+      setAnalyzedInputKey(analysisInputKey({ positions: cleanPositions, lookbackYears, riskFreeRate }));
+      setStorageNotice(null);
     } catch (reason) {
       setError(
         reason instanceof Error
@@ -157,25 +199,28 @@ export function RiskDashboard() {
               <span className="text-sm font-semibold tracking-[0.12em]">
                 RISKLENS
               </span>
-              <span className="hidden text-[9px] tracking-[0.13em] text-muted-foreground sm:inline">
+              <span className="hidden text-[11px] tracking-[0.13em] text-muted-foreground sm:inline">
                 AI PORTFOLIO RISK TERMINAL
               </span>
             </div>
-            <p className="text-[9px] text-muted-foreground">
+            <p className="text-[11px] text-muted-foreground">
               PORTFOLIO / MAIN / ANALYTICS
             </p>
           </div>
         </div>
         <div className="flex items-center gap-2 md:gap-4">
           <div className="hidden items-center gap-2 lg:flex">
-            <span className="text-[9px] uppercase tracking-wider text-muted-foreground">
+            <span className="text-[11px] uppercase tracking-wider text-muted-foreground">
               Lookback
             </span>
             <NativeSelect
               size="sm"
               value={lookbackYears}
               disabled={isLoading}
-              onChange={(event) => setLookbackYears(Number(event.target.value))}
+              onChange={(event) => {
+                setLookbackYears(Number(event.target.value));
+                setStorageNotice(null);
+              }}
               aria-label="Lookback period"
             >
               <NativeSelectOption value="1">1 year</NativeSelectOption>
@@ -183,8 +228,8 @@ export function RiskDashboard() {
               <NativeSelectOption value="5">5 years</NativeSelectOption>
             </NativeSelect>
           </div>
-          <div className="hidden items-center gap-2 md:flex">
-            <span className="text-[9px] uppercase tracking-wider text-muted-foreground">
+          <div className="hidden items-center gap-2 lg:flex">
+            <span className="text-[11px] uppercase tracking-wider text-muted-foreground">
               Risk-free
             </span>
             <div className="relative w-16">
@@ -195,13 +240,14 @@ export function RiskDashboard() {
                 step="0.1"
                 value={Number((riskFreeRate * 100).toFixed(2))}
                 disabled={isLoading}
-                onChange={(event) =>
-                  setRiskFreeRate(Number(event.target.value) / 100)
-                }
+                onChange={(event) => {
+                  setRiskFreeRate(Number(event.target.value) / 100);
+                  setStorageNotice(null);
+                }}
                 className="h-7 rounded-sm pr-5 text-right font-mono text-xs"
                 aria-label="Annual risk-free rate percent"
               />
-              <span className="pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2 text-[9px] text-muted-foreground">
+              <span className="pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2 text-[11px] text-muted-foreground">
                 %
               </span>
             </div>
@@ -216,13 +262,72 @@ export function RiskDashboard() {
             <span
               className={`size-1.5 rounded-full ${mode === 'live' ? 'bg-emerald-400' : 'bg-amber-300'}`}
             />
-            {mode === 'live' ? 'LIVE DATA' : 'DEMO SNAPSHOT'}
+            {mode === 'live' ? 'HISTORICAL DATA' : 'DEMO SNAPSHOT'}
           </Badge>
         </div>
       </header>
 
+      <nav
+        className="flex gap-1 overflow-x-auto border-b border-border bg-sidebar px-3 py-2 lg:hidden"
+        aria-label="Jump to risk sections"
+      >
+        {navItems.map((item) => {
+          const Icon = item.icon;
+          return (
+            <a
+              key={item.label}
+              href={item.href}
+              className="flex shrink-0 items-center gap-1.5 rounded-sm border border-border px-2.5 py-1.5 text-xs text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+            >
+              <Icon className="size-3.5" aria-hidden="true" />
+              {item.label}
+            </a>
+          );
+        })}
+      </nav>
+
       <div className="grid min-h-[calc(100vh-3.5rem)] grid-cols-1 xl:grid-cols-[264px_minmax(0,1fr)]">
         <aside className="border-b border-border bg-sidebar xl:sticky xl:top-14 xl:h-[calc(100vh-3.5rem)] xl:border-r xl:border-b-0">
+          <div className="grid grid-cols-2 gap-3 border-b border-border p-3 lg:hidden">
+            <div>
+              <label htmlFor="mobile-lookback" className="section-label">Lookback</label>
+              <NativeSelect
+                id="mobile-lookback"
+                className="mt-1 w-full"
+                size="sm"
+                value={lookbackYears}
+                disabled={isLoading}
+                onChange={(event) => {
+                  setLookbackYears(Number(event.target.value));
+                  setStorageNotice(null);
+                }}
+              >
+                <NativeSelectOption value="1">1 year</NativeSelectOption>
+                <NativeSelectOption value="3">3 years</NativeSelectOption>
+                <NativeSelectOption value="5">5 years</NativeSelectOption>
+              </NativeSelect>
+            </div>
+            <div>
+              <label htmlFor="mobile-risk-free" className="section-label">Risk-free rate</label>
+              <div className="relative mt-1">
+                <Input
+                  id="mobile-risk-free"
+                  type="number"
+                  min="-10"
+                  max="50"
+                  step="0.1"
+                  value={Number((riskFreeRate * 100).toFixed(2))}
+                  disabled={isLoading}
+                  onChange={(event) => {
+                    setRiskFreeRate(Number(event.target.value) / 100);
+                    setStorageNotice(null);
+                  }}
+                  className="h-8 rounded-sm pr-6 text-right font-mono text-sm"
+                />
+                <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">%</span>
+              </div>
+            </div>
+          </div>
           <div className="grid lg:grid-cols-[264px_1fr] xl:block xl:h-full">
             <div className="xl:h-[calc(100%-236px)]">
               <PortfolioEditor
@@ -247,7 +352,7 @@ export function RiskDashboard() {
                       key={item.label}
                       href={item.href}
                       aria-disabled={!item.ready}
-                      className={`flex items-center gap-2 px-2 py-1.5 text-[10px] ${item.ready ? 'text-muted-foreground hover:bg-accent hover:text-foreground' : 'cursor-not-allowed text-muted-foreground/45'}`}
+                      className={`flex items-center gap-2 rounded-sm px-2 py-1.5 text-[12px] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary ${item.ready ? 'text-muted-foreground hover:bg-accent hover:text-foreground' : 'cursor-not-allowed text-muted-foreground/45'}`}
                       onClick={(event) =>
                         !item.ready &&
                         item.href === '#' &&
@@ -257,7 +362,7 @@ export function RiskDashboard() {
                       <Icon className="size-3.5" />
                       <span>{item.label}</span>
                       {!item.ready && (
-                        <span className="ml-auto font-mono text-[8px]">
+                        <span className="ml-auto font-mono text-[11px]">
                           LATER
                         </span>
                       )}
@@ -270,12 +375,29 @@ export function RiskDashboard() {
         </aside>
 
         <div className="min-w-0 p-3 md:p-4">
+          {(storageNotice || storageUnavailable) && (
+            <output className="mb-3 block text-xs leading-5 text-muted-foreground">
+              {storageUnavailable ? 'Portfolio could not be saved on this device. You can still run analyses.' : storageNotice}
+            </output>
+          )}
+          {mode === 'snapshot' && (
+            <div className="mb-3 flex items-start gap-2 border border-amber-300/25 bg-amber-300/5 px-3 py-2.5 text-xs leading-5 text-amber-100">
+              <Info className="mt-0.5 size-4 shrink-0 text-amber-300" aria-hidden="true" />
+              <p><span className="font-semibold">Demo data.</span> The charts below use a fixed synthetic example. Select a portfolio and click Analyze portfolio to load historical prices.</p>
+            </div>
+          )}
+          {inputsDirty && (
+            <output className="mb-3 flex items-start gap-2 border border-primary/30 bg-primary/5 px-3 py-2.5 text-xs leading-5 text-foreground">
+              <Info className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden="true" />
+              <p><span className="font-semibold">Inputs changed — analysis needs updating.</span> The risk charts still show {mode === 'snapshot' ? 'the demo portfolio' : 'the last analyzed portfolio'}. Click Analyze portfolio to refresh them. Stress testing, optimization, and backtesting use your current inputs.</p>
+            </output>
+          )}
           {error && (
             <Alert variant="destructive" className="mb-3 rounded-sm">
               <AlertTriangle />
               <AlertTitle>Analysis unavailable</AlertTitle>
               <AlertDescription>
-                {error} The deterministic demo snapshot remains visible.
+                {error} {mode === 'snapshot' ? 'The labeled demo snapshot remains visible.' : 'The previous historical analysis remains visible.'}
               </AlertDescription>
             </Alert>
           )}
@@ -298,7 +420,14 @@ export function RiskDashboard() {
             <StressTestPanel positions={positions} />
           </div>
           <div className="mt-3">
-            <RiskOfficer analysis={analysis} />
+            {inputsDirty ? (
+              <output id="risk-officer" className="block border border-primary/30 bg-card p-4 text-sm">
+                <p className="font-semibold">Risk Officer needs an updated analysis</p>
+                <p className="mt-1 text-muted-foreground">Analyze the current portfolio before asking about its risks.</p>
+              </output>
+            ) : (
+              <RiskOfficer key={analyzedInputKey + mode} analysis={analysis} />
+            )}
           </div>
           <div className="mt-3">
             <OptimizationPanel positions={positions} lookbackYears={lookbackYears} riskFreeRate={riskFreeRate} />
@@ -307,7 +436,7 @@ export function RiskDashboard() {
             <BacktestPanel positions={positions} lookbackYears={lookbackYears} riskFreeRate={riskFreeRate} />
           </div>
 
-          <footer className="mt-3 flex flex-col gap-2 border border-border bg-card px-3 py-2 text-[9px] text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
+          <footer className="mt-3 flex flex-col gap-2 border border-border bg-card px-3 py-2 text-[11px] text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-2">
               <Database className="size-3 text-primary" />
               <span>{analysis.data_quality.source}</span>
@@ -327,7 +456,7 @@ export function RiskDashboard() {
             </div>
           </footer>
           {analysis.data_quality.warnings.map((warning) => (
-            <p key={warning} className="mt-2 text-[9px] text-amber-200/75">
+            <p key={warning} className="mt-2 text-[11px] text-amber-200/75">
               Data note: {warning}
             </p>
           ))}

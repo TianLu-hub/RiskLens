@@ -70,3 +70,6 @@ jobs:
 
       - name: Build
         run: pnpm build
+
+      - name: Test portfolio state
+        run: pnpm test
