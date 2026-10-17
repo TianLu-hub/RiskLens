@@ -1,5 +1,6 @@
 'use client';
 import { useLanguage } from '@/components/LanguageProvider';
+import { MetricHelp } from '@/components/MetricHelp';
 
 import {
   Area,
@@ -33,7 +34,10 @@ export function DrawdownChart({ analysis }: { analysis: PortfolioAnalysis }) {
     <Card id="drawdown" className="rounded-sm bg-card ring-border">
       <CardHeader className="flex-row items-center justify-between border-b border-border py-3">
         <div>
-          <p className="section-label">{t('Drawdown analysis')}</p>
+          <p className="section-label flex items-center gap-1">
+            {t('Drawdown analysis')}
+            <MetricHelp metric="drawdown" />
+          </p>
           <p className="mt-1 text-[12px] text-muted-foreground">
             {t('Decline from the running wealth high-water mark')}
           </p>

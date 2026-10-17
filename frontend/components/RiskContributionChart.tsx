@@ -1,6 +1,7 @@
 'use client';
 
 import { useLanguage } from '@/components/LanguageProvider';
+import { MetricHelp } from '@/components/MetricHelp';
 import { GitCompareArrows } from 'lucide-react';
 
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
@@ -19,7 +20,10 @@ export function RiskContributionChart({
     <Card id="contribution" className="rounded-sm bg-card ring-border">
       <CardHeader className="flex-row items-center justify-between border-b border-border py-3">
         <div>
-          <p className="section-label">{t('Risk contribution')}</p>
+          <p className="section-label flex items-center gap-1">
+            {t('Risk contribution')}
+            <MetricHelp metric="risk-contribution" />
+          </p>
           <p className="mt-1 text-[12px] text-muted-foreground">
             {t('Portfolio weight vs. share of volatility')}
           </p>

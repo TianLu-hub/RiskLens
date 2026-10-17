@@ -1,5 +1,6 @@
 'use client';
 import { useLanguage } from '@/components/LanguageProvider';
+import { MetricHelp } from '@/components/MetricHelp';
 
 import { Activity, Database, Info, Sigma } from 'lucide-react';
 import {
@@ -79,6 +80,7 @@ export function FactorExposureChart({
               <div className="bg-card p-3">
                 <p className="text-[11px] uppercase tracking-wider text-muted-foreground">
                   {t('Market beta')}
+                  <MetricHelp metric="beta" />
                 </p>
                 <p className="mt-1 font-mono text-lg text-primary">
                   {t(decimal(factor.market_beta))}

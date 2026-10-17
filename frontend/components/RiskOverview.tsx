@@ -32,36 +32,42 @@ export function RiskOverview({ analysis }: { analysis: PortfolioAnalysis }) {
   const cards = [
     {
       label: 'Annualized return',
+      help: 'annual-return' as const,
       value: pct(metrics.annualized_return),
       detail: 'Geometric · 252-day',
       icon: ChartNoAxesCombined,
     },
     {
       label: 'Annualized volatility',
+      help: 'volatility' as const,
       value: pct(metrics.annualized_volatility),
       detail: 'Sample covariance',
       icon: Waves,
     },
     {
       label: 'Sharpe ratio',
+      help: 'sharpe' as const,
       value: metrics.sharpe_ratio?.toFixed(2) ?? 'N/A',
       detail: `Rf ${pct(metrics.risk_free_rate)}`,
       icon: Gauge,
     },
     {
       label: '95% 1-day VaR',
+      help: 'var' as const,
       value: pct(metrics.var),
       detail: 'Historical loss threshold',
       icon: Sigma,
     },
     {
       label: '95% 1-day CVaR',
+      help: 'cvar' as const,
       value: pct(metrics.cvar),
       detail: 'Expected shortfall',
       icon: Activity,
     },
     {
       label: 'Max drawdown',
+      help: 'drawdown' as const,
       value: pct(drawdown.max_drawdown),
       detail: 'Historical peak to trough',
       icon: ArrowDownRight,

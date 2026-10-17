@@ -14,6 +14,8 @@ RiskLens is a full-stack, desktop-first risk dashboard for stock and ETF portfol
 
 The header's **EN / 中文** control switches the interface between English and Simplified Chinese and remembers your choice in this browser. It does not reset inputs or change numerical results. Unmapped backend prose remains in its original language; monetary values remain USD.
 
+Click the ⓘ beside a metric to read its definition, formula, interpretation, and limitations in the selected language. Help covers nine metrics, including VaR, CVaR, SPY beta, and volatility risk contributions. The explanations document the Python implementation and make no AI requests.
+
 | Area | Implemented capability |
 | --- | --- |
 | Risk overview | Geometric return, volatility, Sharpe estimate, historical one-day VaR/CVaR, drawdown, correlation, Euler risk contribution, concentration, and rule-based flags. |

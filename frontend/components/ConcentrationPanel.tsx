@@ -1,6 +1,7 @@
 'use client';
 
 import { useLanguage } from '@/components/LanguageProvider';
+import { MetricHelp } from '@/components/MetricHelp';
 import { CircleGauge } from 'lucide-react';
 
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
@@ -47,6 +48,9 @@ export function ConcentrationPanel({
           <div key={label} className="bg-card p-4">
             <p className="text-[11px] uppercase tracking-wider text-muted-foreground">
               {t(label)}
+              {label === 'Effective positions' && (
+                <MetricHelp metric="effective-positions" />
+              )}
             </p>
             <p className="mt-2 font-mono text-lg">{value}</p>
             <p className="mt-1 text-[11px] text-muted-foreground">
