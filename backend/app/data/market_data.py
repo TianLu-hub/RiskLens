@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from collections import OrderedDict
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from threading import Lock
@@ -56,11 +57,19 @@ class MarketDataProvider(ABC):
 class YahooFinanceProvider(MarketDataProvider):
     """Yahoo Finance implementation isolated behind the provider interface."""
 
-    def __init__(self, cache_ttl: timedelta = timedelta(minutes=15)) -> None:
+    def __init__(
+        self,
+        cache_ttl: timedelta = timedelta(minutes=15),
+        *,
+        max_cache_entries: int = 128,
+    ) -> None:
+        if max_cache_entries < 1:
+            raise ValueError("max_cache_entries must be positive")
         self.cache_ttl = cache_ttl
-        self._cache: dict[
+        self.max_cache_entries = max_cache_entries
+        self._cache: OrderedDict[
             tuple[tuple[str, ...], str, str], tuple[datetime, PriceHistory]
-        ] = {}
+        ] = OrderedDict()
         self._lock = Lock()
 
     def get_adjusted_prices(
@@ -71,8 +80,10 @@ class YahooFinanceProvider(MarketDataProvider):
         now = datetime.now(UTC)
 
         with self._lock:
+            self._evict_expired(now)
             cached = self._cache.get(key)
-            if cached and now - cached[0] < self.cache_ttl:
+            if cached:
+                self._cache.move_to_end(key)
                 return self._copy_history(cached[1], cache_hit=True)
 
         try:
@@ -177,10 +188,31 @@ class YahooFinanceProvider(MarketDataProvider):
             ),
         )
         with self._lock:
+            # Other requests may have filled the cache during this download.
+            # Prune and enforce capacity under the same lock as insertion.
+            self._evict_expired(datetime.now(UTC))
             # DataFrames and lists remain mutable inside a frozen dataclass. Keep
             # a private snapshot so a caller cannot corrupt subsequent analyses.
             self._cache[key] = (fetched_at, self._copy_history(result))
+            self._cache.move_to_end(key)
+            while len(self._cache) > self.max_cache_entries:
+                self._cache.popitem(last=False)
         return self._copy_history(result)
+
+    def _evict_expired(self, now: datetime) -> None:
+        """Release expired snapshots on access; caller must hold self._lock.
+
+        LRU order is not timestamp order: a hit changes recency, not fetch time.
+        Scan the bounded cache so a recently used but expired entry is removed too.
+        """
+
+        expired = [
+            key
+            for key, (fetched_at, _) in self._cache.items()
+            if now - fetched_at >= self.cache_ttl
+        ]
+        for key in expired:
+            del self._cache[key]
 
     @staticmethod
     def _copy_history(
