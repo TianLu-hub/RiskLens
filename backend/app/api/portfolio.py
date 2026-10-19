@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Path, Query
 
 from app.data.market_data import (
     InsufficientHistoryError,
@@ -11,7 +11,7 @@ from app.data.market_data import (
     MarketDataUnavailableError,
     get_market_data_provider,
 )
-from app.models.portfolio import AnalyzeRequest
+from app.models.portfolio import AnalyzeRequest, normalize_ticker
 from app.models.responses import (
     HistoryPoint,
     MarketHistoryResponse,
@@ -54,7 +54,7 @@ def analyze(
 
 @router.get("/market/history/{ticker}", response_model=MarketHistoryResponse)
 def market_history(
-    ticker: str,
+    ticker: str = Path(min_length=1, max_length=15),
     lookback_years: int = Query(default=1, ge=1, le=10),
     provider: MarketDataProvider = Depends(get_market_data_provider),
 ) -> MarketHistoryResponse:
@@ -62,7 +62,13 @@ def market_history(
 
     from datetime import UTC, datetime, timedelta
 
-    normalized = ticker.strip().upper()
+    try:
+        normalized = normalize_ticker(ticker)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=422,
+            detail={"code": "INVALID_TICKER", "message": str(exc)},
+        ) from exc
     end = datetime.now(UTC)
     start = end - timedelta(days=int(lookback_years * 365.25) + 10)
     try:

@@ -11,6 +11,18 @@ TICKER_PATTERN = re.compile(r"^[A-Z0-9][A-Z0-9.\-]{0,14}$")
 WEIGHT_TOLERANCE = 1e-4
 
 
+def normalize_ticker(value: str) -> str:
+    """Normalize one supported ticker; reject multi-symbol/provider query syntax."""
+
+    ticker = value.strip().upper()
+    if not TICKER_PATTERN.fullmatch(ticker):
+        raise ValueError(
+            "Ticker must start with a letter or number and contain 1–15 letters, "
+            "numbers, dots, or hyphens"
+        )
+    return ticker
+
+
 class Position(BaseModel):
     """One long-only portfolio position."""
 
@@ -21,12 +33,7 @@ class Position(BaseModel):
     @field_validator("ticker")
     @classmethod
     def normalize_ticker(cls, value: str) -> str:
-        ticker = value.strip().upper()
-        if not TICKER_PATTERN.fullmatch(ticker):
-            raise ValueError(
-                "Ticker must contain only letters, numbers, dots, or hyphens"
-            )
-        return ticker
+        return normalize_ticker(value)
 
 
 class AnalyzeRequest(BaseModel):
