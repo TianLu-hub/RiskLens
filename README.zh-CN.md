@@ -184,6 +184,25 @@ pnpm dev
 
 当前前端部署在 OpenAI Sites，FastAPI 后端部署在 Railway。换平台部署时，前端 `NEXT_PUBLIC_API_URL` 应填**公开的 HTTPS 后端地址**，不可填 localhost；后端 `CORS_ORIGINS` 应填准确的前端来源。若启用可选 LLM，`OPENAI_API_KEY` 只能配置在后端。本版本没有用户账户和云端保存组合。
 
+### 上线后检查
+
+安装后端依赖后，在 `backend/` 目录运行：
+
+```bash
+# 检查本地 API 与浏览器来源，不调用 Yahoo 或 LLM
+python -m scripts.check_deployment
+
+# 检查线上 API，并主动验证历史行情请求
+python -m scripts.check_deployment \
+  --api-url https://balanced-intuition-production-6020.up.railway.app \
+  --origin https://risklens-ai-portfolio-risk-terminal.tianlu923.chatgpt.site \
+  --include-market-data --timeout 60
+```
+
+工具验证 RiskLens 健康响应、浏览器 CORS 预检、实际响应的跨域头，以及假设压力测试的响应结构。加上 `--include-market-data` 后，还会将默认组合提交到 `/portfolio/analyze`，可能命中缓存或获取 Yahoo 历史数据。不调用 AI、不保存组合、不修改部署设置。
+
+退出码 `0` 表示所选检查通过，`1` 表示某项检查失败，`2` 表示命令参数错误。连接失败时检查 API 地址、TLS、超时和服务状态；跨域失败时检查后端 `CORS_ORIGINS`。即使 `/health` 正常，行情分析仍可能因数据源不可用而返回 `503`。重定向和 HTML 登录页不算健康 API。本工具检查连通性和响应结构，不替代量化正确性审计、行情新鲜度核验或浏览器界面测试。
+
 ## 数据来源与样本
 
 历史行情缓存保存在各后端进程内，有效期为 15 分钟，默认最多保留 128 个组合／日期区间条目。请求时清理过期条目；容量满后淘汰最久未使用的条目。缓存命中不延长原有效期。条目上限限制的是保留的历史快照，不等于进程总内存或并发下载上限。
@@ -197,7 +216,7 @@ pnpm dev
 ```bash
 cd backend
 .venv/bin/pytest -q
-.venv/bin/ruff check app tests
+.venv/bin/ruff check app scripts tests
 
 cd ../frontend
 pnpm lint
@@ -205,7 +224,7 @@ pnpm test
 pnpm build
 ```
 
-后端测试使用确定性的合成价格数据，不依赖 Yahoo Finance 或 LLM 账户。本次数据溯源更新通过 **60 项后端测试和 21 项前端测试**，以及 lint 与 TypeScript 检查。上线后应单独验证真实行情数据链路。
+后端测试使用确定性的合成价格数据，不依赖 Yahoo Finance 或 LLM 账户。部署检查工具的测试同样使用进程内 API 和模拟网络。当前测试结果以 CI 为准；上线后可用上述可选检查单独验证真实行情链路。
 
 ## 局限性与后续方向
 

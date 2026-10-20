@@ -184,6 +184,25 @@ Example `/portfolio/backtest` request:
 
 The frontend is deployed as an OpenAI Site and the FastAPI backend on Railway. For another deployment, set frontend `NEXT_PUBLIC_API_URL` to the backend's **public HTTPS origin**, never localhost; set backend `CORS_ORIGINS` to the exact frontend origin. Keep any optional `OPENAI_API_KEY` on the backend only. Saved accounts and portfolios are not part of this release.
 
+### Check a deployment
+
+With backend dependencies installed, run this from `backend/`:
+
+```bash
+# Local API and browser origin; no Yahoo or LLM calls
+python -m scripts.check_deployment
+
+# Published API, including an optional historical-data request
+python -m scripts.check_deployment \
+  --api-url https://balanced-intuition-production-6020.up.railway.app \
+  --origin https://risklens-ai-portfolio-risk-terminal.tianlu923.chatgpt.site \
+  --include-market-data --timeout 60
+```
+
+The check verifies the RiskLens health response, browser CORS preflight, actual-response CORS headers, and a typed hypothetical stress response. `--include-market-data` also submits the default portfolio to `/portfolio/analyze`; it may use cached history or fetch Yahoo data. No AI endpoint is called, no portfolio is saved, and no deployment settings are changed.
+
+Exit code `0` means the requested checks passed; `1` identifies a failed check; `2` means invalid command arguments. A connection failure points to the API URL, TLS, timeout, or service availability. CORS failures point to backend `CORS_ORIGINS`. A market-analysis `503` can mean the data provider is unavailable even when `/health` passes. Redirects and HTML login pages do not count as a healthy API. This is a connectivity/response-contract check, not a numerical audit, freshness guarantee, or browser UI test.
+
 ## Data provenance
 
 Market-history caching is process-local: a 15-minute TTL and a default cap of 128 portfolio/date-range entries. Requests remove expired entries; when full, the least recently used entry is evicted. Cache hits do not extend the original expiry. The entry cap limits retained snapshots, not total process memory or concurrent downloads.
@@ -197,7 +216,7 @@ The actual sample count is daily **returns**, not price rows or the requested nu
 ```bash
 cd backend
 .venv/bin/pytest -q
-.venv/bin/ruff check app tests
+.venv/bin/ruff check app scripts tests
 
 cd ../frontend
 pnpm lint
@@ -205,7 +224,7 @@ pnpm test
 pnpm build
 ```
 
-Tests use deterministic synthetic price fixtures, with no Yahoo Finance or LLM dependency. The provenance update passed **60 backend tests and 21 frontend tests**, plus lint and TypeScript checks. Verify live market access separately after deployment.
+Tests use deterministic synthetic price fixtures, with no Yahoo Finance or LLM dependency. Deployment-check tests also use an in-process API and mocked transport. See the CI run for current results; use the opt-in deployment check above to verify live market access separately.
 
 ## Limitations and next research steps
 
