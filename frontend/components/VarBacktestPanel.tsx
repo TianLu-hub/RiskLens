@@ -12,6 +12,7 @@ import {
 } from 'recharts';
 
 import { DataProvenance } from '@/components/DataProvenance';
+import { KupiecTest } from '@/components/KupiecTest';
 import { useLanguage } from '@/components/LanguageProvider';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
@@ -301,6 +302,7 @@ export function VarBacktestPanel({
                 <p className="text-xs leading-5 text-muted-foreground">
                   {c.expectedNote}
                 </p>
+                <KupiecTest result={current.kupiec_test} />
                 {notices.length > 0 && (
                   <Alert className="border-amber-300/25 bg-amber-300/5 text-amber-200">
                     <AlertTriangle aria-hidden="true" />

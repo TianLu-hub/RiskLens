@@ -20,7 +20,8 @@ from app.data.market_data import (
 )
 from app.data.provenance import AssetCoverage, MarketDataProvenance
 from app.main import app
-from app.models.var_backtest import VarBacktestRequest
+from app.models.var_backtest import KupiecTestResult, VarBacktestRequest
+from app.risk.kupiec import kupiec_unconditional_coverage
 from app.risk.var import historical_var
 from app.risk.var_backtest import backtest_var_portfolio, rolling_var_backtest
 
@@ -240,7 +241,13 @@ def test_summary_counts_rates_and_whole_sample_metadata_reconcile() -> None:
     assert result.data_quality.end_date == result.test_end
     assert result.data_quality.provenance is None
     assert "risk_free_rate input is unused" in result.methodology
-    assert any("no statistical significance test" in item for item in result.limitations)
+    assert result.kupiec_test.observations == result.test_observations
+    assert result.kupiec_test.breaches == result.breach_count
+    assert result.kupiec_test.null_breach_probability == result.expected_breach_rate
+    assert result.kupiec_test.observed_breach_probability == result.breach_rate
+    assert any("not breach clustering" in item for item in result.limitations)
+    assert any("p-values are asymptotic" in item for item in result.limitations)
+    assert all("no statistical significance test" not in item for item in result.limitations)
 
 
 def test_inherited_risk_free_rate_does_not_change_raw_return_validation() -> None:
@@ -367,6 +374,22 @@ def test_api_success_preserves_provenance_and_actual_sample() -> None:
     assert payload["test_observations"] == 40
     assert payload["series"][0]["training_end"] < payload["test_start"]
     assert payload["series"][-1]["date"] == payload["test_end"]
+    kupiec = KupiecTestResult.model_validate(payload["kupiec_test"])
+    expected = kupiec_unconditional_coverage(
+        observations=payload["test_observations"],
+        breaches=sum(point["breach"] for point in payload["series"]),
+        null_breach_probability=1 - payload["confidence_level"],
+    )
+    assert kupiec == expected
+    assert kupiec.method == "kupiec_unconditional_coverage"
+    assert kupiec.degrees_of_freedom == 1
+    assert kupiec.significance_level == 0.05
+    assert kupiec.reject_null is (kupiec.p_value < 0.05)
+    assert set(payload["kupiec_test"]) == {
+        "method", "statistic", "p_value", "degrees_of_freedom", "significance_level",
+        "reject_null", "null_breach_probability", "observed_breach_probability",
+        "observations", "breaches", "warning_codes",
+    }
 
 
 def test_api_insufficient_history_returns_clear_error() -> None:

@@ -24,7 +24,7 @@ RiskLens 是面向股票与 ETF 投资组合的全栈风险分析项目。用户
 | 因子暴露 | 以 SPY 为市场代理的历史回归：beta、alpha、R²、残差波动率及 60 日滚动 beta；不伪造 SMB/HML。 |
 | 组合优化 | 仅做多的最小波动率、最大 Sharpe、风险平价，可设置单一持仓上限；不会自动改动用户组合。 |
 | 滚动回测 | 用过去数据拟合、在后续日期测试；模拟权重漂移、月度调仓、可配置交易成本，并与固定目标权重组合比较。 |
-| VaR 检验 | 用此前的滚动窗口估计单日历史 VaR，与下一日实际观测损失比较；报告突破次数、比例及逐日预测记录。 |
+| VaR 检验 | 滚动单日历史 VaR 预测、逐日突破记录，以及带中英文解释和小样本提示的 Kupiec 无条件覆盖检验。 |
 
 默认组合：**AAPL 20% · MSFT 20% · NVDA 15% · SPY 25% · TLT 20%**。
 
@@ -42,7 +42,7 @@ flowchart TB
     ALIGN --> RISK[风险指标 + SPY 因子回归]
     ALIGN --> OPT[受约束组合优化]
     ALIGN --> BACK[滚动样本外回测]
-    ALIGN --> VAR[滚动历史 VaR 检验]
+    ALIGN --> VAR[滚动历史 VaR 检验<br/>Kupiec 覆盖检验]
     API --> STRESS[确定性压力测试引擎]
     API -->|自然语言情景| PARSER[规则解析器或可选 LLM 解析器]
     PARSER -->|经验证的结构化输入| STRESS
@@ -92,7 +92,21 @@ flowchart LR
 
 默认训练窗口为 252 个日收益（可选范围为 60–1260），其后至少需要 20 个样本外日收益。`data_quality.observations`、`start_date` 和 `end_date` 描述包含训练期在内的全部对齐收益样本；`test_observations`、`test_start` 和 `test_end` 仅描述接受检验的预测日。逐日记录包含训练起止日期、带符号的 VaR 阈值、观测收益／损失及突破标记。数据源元数据原样传递。
 
-名义预期突破比例为 `1 − confidence_level`，预期次数为该比例乘以测试观测数。测试少于 252 天或预期突破次数低于 5 时会给出提示。样本较少、尾部分位精度有限、训练窗口重叠以及收益序列相关性都会限制结果的解释范围。次数和比例仅作描述；本版本尚不提供 Kupiec 检验、统计显著性结果或通过／不通过判定。
+名义预期突破比例为 `1 − confidence_level`，预期次数为该比例乘以测试观测数。测试少于 252 天或预期突破次数低于 5 时会给出提示。样本较少、尾部分位精度有限、训练窗口重叠以及收益序列相关性都会限制结果的解释范围。
+
+#### Kupiec 无条件覆盖检验
+
+Python 后端检验观测突破频率是否与名义比例一致。设测试天数为 `N`、突破次数为 `x`、`p0 = 1 − confidence_level`、`p_hat = x/N`：
+
+```text
+logL(p) = x × log(p) + (N − x) × log(1 − p)
+LR = 2 × [logL(p_hat) − logL(p0)]
+p_value = 自由度为 1 的卡方分布右尾概率(LR)
+```
+
+零次数对应的对数项定义为零，因此零次突破和全部突破仍能得到有限的统计量。检验显著性水平固定为 **5%**，与所选 VaR 置信水平分别展示。未舍入的 `p_value < 0.05` 时拒绝覆盖原假设，否则显示**不拒绝原假设**，而不是“模型通过”或“安全”。突破过少或过多都可能导致拒绝。前端直接展示后端结论，不自行重新计算。
+
+这是基于独立、固定突破概率伯努利模型的渐近似然比检验。预期突破／未突破次数低于五，以及零次／全部突破时，会另行提示。它不检验突破是否聚集、是否独立，也不检验尾部损失大小；收益序列相关和滚动窗口重叠可能削弱其统计校准。不拒绝原假设不等于证明风险覆盖正确。方法参考：[Kupiec POF 定义及边界公式](https://www.mathworks.com/help/risk/varbacktest.pof.html)、[覆盖与独立性检验的区别](https://www.mathworks.com/help/risk/overview-of-var-backtesting.html)。
 
 ## 主要量化定义
 
@@ -168,7 +182,7 @@ pnpm dev
 | `POST /portfolio/stress-test` | 假设性冲击与损益归因。 |
 | `POST /portfolio/optimize` | 样本内优化对比。 |
 | `POST /portfolio/backtest` | 按时间顺序的滚动回测。 |
-| `POST /portfolio/var-backtest` | 对单日历史 VaR 进行滚动样本外检验。 |
+| `POST /portfolio/var-backtest` | 单日历史 VaR 滚动样本外检验及 Kupiec 无条件覆盖检验。 |
 | `POST /ai/risk-officer` | 风险解释或情景翻译。 |
 | `GET /market/history/{ticker}` | 标准化价格历史。 |
 | `GET /health` | 服务状态与版本。 |
@@ -206,6 +220,8 @@ pnpm dev
 ```
 
 该请求沿用 `/portfolio/analyze` 的组合输入校验。继承的 `risk_free_rate` 参数可以传入，但不参与计算，因为历史 VaR 使用组合原始收益。
+
+响应中的 `kupiec_test` 包含似然比统计量 `statistic`、`p_value`、自由度、固定显著性水平、后端判定 `reject_null`、名义／观测突破概率、样本／突破次数以及 `warning_codes`。所有数值使用与图表和明细表相同的样本外突破标记。旧后端若未提供此字段，界面显示检验不可用，不生成替代数值。
 
 当前前端部署在 OpenAI Sites，FastAPI 后端部署在 Railway。换平台部署时，前端 `NEXT_PUBLIC_API_URL` 应填**公开的 HTTPS 后端地址**，不可填 localhost；后端 `CORS_ORIGINS` 应填准确的前端来源。若启用可选 LLM，`OPENAI_API_KEY` 只能配置在后端。本版本没有用户账户和云端保存组合。
 

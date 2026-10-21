@@ -1,4 +1,5 @@
 import type { PortfolioAnalysis, PositionInput } from './types';
+import type { KupiecTestResult } from './kupiec';
 
 export type VarBacktestRequest = {
   positions: PositionInput[];
@@ -27,6 +28,7 @@ export type VarBacktestResponse = {
   expected_breach_count: number;
   breach_rate: number;
   expected_breach_rate: number;
+  kupiec_test?: KupiecTestResult | null;
   test_start: string;
   test_end: string;
   series: VarBacktestPoint[];
@@ -188,7 +190,8 @@ export const varBacktestCopy = {
       'Historical validation does not guarantee future risk coverage or performance.',
       'Today’s choice of holdings can introduce hindsight and survivorship bias.',
       'Trading costs, taxes, spreads, slippage, and market impact are excluded.',
-      'Overlapping windows and dependent returns limit breach-count interpretation. This view does not run a significance test or declare a model “passed”.',
+      'Overlapping windows and dependent returns limit breach-count interpretation. Kupiec tests overall frequency only; it does not establish independence or guarantee future coverage.',
+      'Kupiec p-values use an asymptotic chi-square approximation. Small expected counts, boundary outcomes, and dependent returns can make that approximation unreliable.',
       'Historical quantiles have limited tail resolution, especially at high confidence levels, and can miss losses beyond the observed sample.',
     ],
     notices: 'Sample cautions',
@@ -255,7 +258,8 @@ export const varBacktestCopy = {
       '历史验证不保证未来风险覆盖程度或投资表现。',
       '以今天选择的证券回看历史，可能包含事后选择或幸存者偏差。',
       '未计入交易成本、税费、买卖价差、滑点或市场冲击。',
-      '重叠训练窗口及收益间的依赖性会限制突破次数的解释。本页不进行显著性检验，也不宣称模型“通过”。',
+      '重叠训练窗口及收益间的依赖性会限制突破次数的解释。Kupiec 仅检验总体频率，不证明突破相互独立，也不保证未来风险覆盖。',
+      'Kupiec p 值采用渐近卡方近似。预期次数较少、边界结果及收益间的依赖性都可能使该近似不可靠。',
       '历史分位数的尾部信息有限，尤其在高置信水平下，可能遗漏超出已有样本的极端损失。',
     ],
     notices: '样本提示',

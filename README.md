@@ -24,7 +24,7 @@ Click the ⓘ beside a metric to read its definition, formula, interpretation, a
 | Factor exposure | Historical regression against SPY: beta, alpha, R², residual volatility, and rolling 60-day beta. SMB/HML are not fabricated. |
 | Optimization | Long-only minimum volatility, maximum Sharpe, and risk parity with optional position caps. Results never change holdings automatically. |
 | Walk-forward test | Refit on trailing data and evaluate only on later dates; model weight drift, monthly rebalancing, configurable costs, and a fixed-weight baseline. |
-| VaR validation | Estimate one-day historical VaR from a rolling prior window and compare it with the next observed loss; report breach counts, rates, and dated forecasts. |
+| VaR validation | Rolling one-day historical VaR forecasts, breach audit, and Kupiec unconditional coverage test with bilingual interpretation and small-sample warnings. |
 
 Default portfolio: **AAPL 20% · MSFT 20% · NVDA 15% · SPY 25% · TLT 20%**.
 
@@ -42,7 +42,7 @@ flowchart TB
     ALIGN --> RISK[Risk metrics + SPY factor regression]
     ALIGN --> OPT[Constrained optimizer]
     ALIGN --> BACK[Walk-forward backtest]
-    ALIGN --> VAR[Rolling historical VaR validation]
+    ALIGN --> VAR[Rolling historical VaR validation<br/>Kupiec coverage test]
     API --> STRESS[Deterministic stress engine]
     API -->|Natural-language scenario| PARSER[Bounded parser or optional LLM parser]
     PARSER -->|Validated structured input| STRESS
@@ -92,7 +92,21 @@ For each test day `t`, use exactly the preceding `window_days` aligned portfolio
 
 The default window is 252 daily returns (allowed range: 60–1260), and at least 20 subsequent out-of-sample returns are required. `data_quality.observations`, `start_date`, and `end_date` describe the whole aligned return sample, including training; `test_observations`, `test_start`, and `test_end` describe only the evaluated forecast days. Each series point includes its training dates, signed VaR threshold, realized return/loss, and breach flag. Provider provenance is passed through unchanged.
 
-The nominal expected breach rate is `1 − confidence_level`; the expected count is that rate times the number of test observations. Warnings identify fewer than 252 test days or an expected count below 5. Small samples, limited tail resolution, overlapping training windows, and dependent returns restrict interpretation. Counts are descriptive: this version includes no Kupiec test, statistical significance result, or pass/fail judgment.
+The nominal expected breach rate is `1 − confidence_level`; the expected count is that rate times the number of test observations. Warnings identify fewer than 252 test days or an expected count below 5. Small samples, limited tail resolution, overlapping training windows, and dependent returns restrict interpretation.
+
+#### Kupiec unconditional coverage test
+
+The Python backend tests whether the observed breach frequency is consistent with the nominal rate. For `N` forecast days, `x` breaches, `p0 = 1 − confidence_level`, and `p_hat = x/N`:
+
+```text
+logL(p) = x × log(p) + (N − x) × log(1 − p)
+LR = 2 × [logL(p_hat) − logL(p0)]
+p_value = chi-square survival function(LR, degrees of freedom = 1)
+```
+
+Zero-count log terms are defined as zero, so zero breaches and all breaches yield finite statistics. The fixed significance level is **5%**, separate from the selected VaR confidence level. Reject the coverage null when the unrounded `p_value < 0.05`; otherwise report **do not reject**, never “model passed” or “safe.” Rejection can reflect too few or too many breaches. The UI displays the backend's decision without recalculating it.
+
+This is an asymptotic likelihood-ratio test based on an independent Bernoulli breach model with a constant probability. Expected breach/non-breach counts below five and boundary counts trigger additional warnings. It does not test breach clustering, independence, or the size of tail losses; dependent returns and overlapping rolling estimates can weaken its calibration. Non-rejection is not proof of correct risk coverage. See the [Kupiec POF definition and endpoint formulas](https://www.mathworks.com/help/risk/varbacktest.pof.html) and [coverage versus independence tests](https://www.mathworks.com/help/risk/overview-of-var-backtesting.html).
 
 ## Quantitative definitions
 
@@ -168,7 +182,7 @@ Alternatively, run `docker compose up --build` at the repository root; the front
 | `POST /portfolio/stress-test` | Hypothetical shocks and P&L attribution. |
 | `POST /portfolio/optimize` | In-sample allocation comparison. |
 | `POST /portfolio/backtest` | Chronological walk-forward comparison. |
-| `POST /portfolio/var-backtest` | Rolling out-of-sample validation of one-day historical VaR. |
+| `POST /portfolio/var-backtest` | Rolling one-day historical VaR validation and Kupiec unconditional coverage test. |
 | `POST /ai/risk-officer` | Risk interpretation or scenario translation. |
 | `GET /market/history/{ticker}` | Normalized price history. |
 | `GET /health` | Service liveness and version. |
@@ -206,6 +220,8 @@ Example `/portfolio/var-backtest` request:
 ```
 
 This request uses the same portfolio input validation as `/portfolio/analyze`. The inherited `risk_free_rate` input is accepted but unused: historical VaR uses raw portfolio returns.
+
+The response includes `kupiec_test`: the likelihood-ratio `statistic`, `p_value`, `degrees_of_freedom`, fixed `significance_level`, authoritative `reject_null` decision, nominal/observed breach probabilities, sample/breach counts, and `warning_codes`. These values use the same out-of-sample breach flags as the chart and audit table. An older backend without this field shows an unavailable test in the UI, not a fabricated result.
 
 The frontend is deployed as an OpenAI Site and the FastAPI backend on Railway. For another deployment, set frontend `NEXT_PUBLIC_API_URL` to the backend's **public HTTPS origin**, never localhost; set backend `CORS_ORIGINS` to the exact frontend origin. Keep any optional `OPENAI_API_KEY` on the backend only. Saved accounts and portfolios are not part of this release.
 

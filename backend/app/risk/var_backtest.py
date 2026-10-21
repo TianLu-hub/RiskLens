@@ -20,6 +20,7 @@ from app.models.var_backtest import (
     VarBacktestRequest,
     VarBacktestResponse,
 )
+from app.risk.kupiec import kupiec_unconditional_coverage
 from app.risk.metrics import TRADING_DAYS, daily_returns, portfolio_returns
 from app.risk.var import historical_var
 
@@ -127,6 +128,11 @@ def backtest_var_portfolio(
         expected_breach_rate=expected_breach_rate,
         test_start=points[0].date,
         test_end=points[-1].date,
+        kupiec_test=kupiec_unconditional_coverage(
+            observations=test_observations,
+            breaches=breach_count,
+            null_breach_probability=expected_breach_rate,
+        ),
         series=points,
         data_quality=DataQuality(
             source=history.source,
@@ -145,14 +151,19 @@ def backtest_var_portfolio(
             "A breach occurs strictly when realized_loss = -realized_return exceeds var_loss; "
             "equality is not a breach and negative VaR values are retained. "
             "Returns and loss thresholds are fractions of portfolio value. "
-            "The inherited risk_free_rate input is unused because VaR uses raw returns."
+            "The inherited risk_free_rate input is unused because VaR uses raw returns. "
+            "Kupiec's likelihood-ratio test compares the observed breach frequency with "
+            "1 - confidence_level using a chi-square reference distribution with one degree "
+            "of freedom and a fixed 5% significance level."
         ),
         limitations=[
             "Historical hypothetical validation does not guarantee future risk coverage or performance.",
             "Current holdings and weights were selected today and can embed hindsight or survivorship bias.",
             "Daily rebalancing excludes transaction costs, taxes, spreads, slippage, and market impact.",
-            "Overlapping training windows and dependent returns limit interpretation of breach counts; "
-            "no statistical significance test or pass/fail judgment is provided.",
+            "Kupiec tests unconditional breach frequency, not breach clustering, independence, "
+            "or loss severity. Failure to reject does not establish that the VaR model is valid.",
+            "Chi-square p-values are asymptotic; small expected counts, boundary outcomes, "
+            "overlapping training windows, and dependent returns can make the approximation unreliable.",
             "Historical sample quantiles have limited tail resolution, especially at high confidence "
             "levels, and may miss losses beyond the observed sample.",
         ],
