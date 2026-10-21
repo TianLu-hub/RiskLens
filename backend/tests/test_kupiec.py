@@ -19,7 +19,10 @@ from app.risk.kupiec import kupiec_unconditional_coverage
     ],
 )
 def test_known_interior_likelihood_ratios(
-    breaches: int, statistic: float, p_value: float, reject: bool,
+    breaches: int,
+    statistic: float,
+    p_value: float,
+    reject: bool,
 ) -> None:
     result = kupiec_unconditional_coverage(
         observations=250, breaches=breaches, null_breach_probability=0.05
@@ -27,7 +30,9 @@ def test_known_interior_likelihood_ratios(
     assert result.statistic == pytest.approx(statistic, rel=1e-11)
     assert result.p_value == pytest.approx(p_value, rel=1e-11)
     # For df=1, the chi-square survival probability has this independent form.
-    assert result.p_value == pytest.approx(math.erfc(math.sqrt(statistic / 2)), rel=1e-11)
+    assert result.p_value == pytest.approx(
+        math.erfc(math.sqrt(statistic / 2)), rel=1e-11
+    )
     assert result.reject_null is reject
     assert result.warning_codes == []
 
@@ -62,7 +67,8 @@ def test_exact_nominal_frequency_returns_zero_statistic_and_unit_p_value() -> No
 )
 @pytest.mark.parametrize("breaches", [0, 5, 100])
 def test_extreme_valid_probabilities_never_produce_nan_or_infinity(
-    probability: float, breaches: int,
+    probability: float,
+    breaches: int,
 ) -> None:
     result = kupiec_unconditional_coverage(
         observations=100, breaches=breaches, null_breach_probability=probability
@@ -95,7 +101,9 @@ def test_either_low_expected_category_triggers_warning(probability: float) -> No
     [(0.05, False), (np.nextafter(0.05, 0.0), True), (np.nextafter(0.05, 1.0), False)],
 )
 def test_rejection_uses_unrounded_p_value_strictly_below_fixed_significance(
-    p_value: float, reject: bool, monkeypatch: pytest.MonkeyPatch,
+    p_value: float,
+    reject: bool,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr("app.risk.kupiec.chi2.sf", lambda statistic, df: p_value)
     result = kupiec_unconditional_coverage(

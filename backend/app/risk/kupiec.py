@@ -39,16 +39,22 @@ def kupiec_unconditional_coverage(
         or not isinstance(null_breach_probability, Real)
         or not 0.0 < null_breach_probability < 1.0
     ):
-        raise ValueError("Null breach probability must be finite and strictly between zero and one")
+        raise ValueError(
+            "Null breach probability must be finite and strictly between zero and one"
+        )
     probability = float(null_breach_probability)
     if not math.isfinite(probability) or not 0.0 < probability < 1.0:
-        raise ValueError("Null breach probability must be finite and strictly between zero and one")
+        raise ValueError(
+            "Null breach probability must be finite and strictly between zero and one"
+        )
     observations = int(observations)
     breaches = int(breaches)
     try:
         float(observations)
     except OverflowError as exc:
-        raise ValueError("Observation count is too large for a finite test statistic") from exc
+        raise ValueError(
+            "Observation count is too large for a finite test statistic"
+        ) from exc
 
     observed_probability = breaches / observations
     nonbreaches = observations - breaches
