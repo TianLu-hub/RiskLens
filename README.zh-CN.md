@@ -233,16 +233,18 @@ pnpm dev
 # 检查本地 API 与浏览器来源，不调用 Yahoo 或 LLM
 python -m scripts.check_deployment
 
-# 检查线上 API，并主动验证历史行情请求
+# 检查线上 API、历史行情分析和滚动 VaR/Kupiec 验证
 python -m scripts.check_deployment \
   --api-url https://balanced-intuition-production-6020.up.railway.app \
   --origin https://risklens-ai-portfolio-risk-terminal.tianlu923.chatgpt.site \
-  --include-market-data --timeout 60
+  --include-market-data --include-var-backtest --timeout 60
 ```
 
 工具验证 RiskLens 健康响应、浏览器 CORS 预检、实际响应的跨域头，以及假设压力测试的响应结构。加上 `--include-market-data` 后，还会将默认组合提交到 `/portfolio/analyze`，可能命中缓存或获取 Yahoo 历史数据。不调用 AI、不保存组合、不修改部署设置。
 
-退出码 `0` 表示所选检查通过，`1` 表示某项检查失败，`2` 表示命令参数错误。连接失败时检查 API 地址、TLS、超时和服务状态；跨域失败时检查后端 `CORS_ORIGINS`。即使 `/health` 正常，行情分析仍可能因数据源不可用而返回 `503`。重定向和 HTML 登录页不算健康 API。本工具检查连通性和响应结构，不替代量化正确性审计、行情新鲜度核验或浏览器界面测试。
+`--include-var-backtest` 可独立启用，检查 `/portfolio/var-backtest` 及该路由的预检和响应跨域头。请求使用默认组合、三年历史、252 日训练窗口和 95% VaR。工具验证 Kupiec 响应结构，将样本数和突破汇总与逐日记录核对，检查训练日期和带符号损失，并核对检验结论是否对应未舍入的 p 值。旧后端缺少 Kupiec 字段时会检查失败；统计检验合法地**拒绝原假设**不会被当作部署失败。此选项可能获取 Yahoo 历史数据，两个行情检查选项均需显式启用。工具不会重新计算 VaR 分位数或 Kupiec 似然比。
+
+退出码 `0` 表示所选检查通过，`1` 表示某项检查失败，`2` 表示命令参数错误。连接失败时检查 API 地址、TLS、超时和服务状态；跨域失败时检查后端 `CORS_ORIGINS`。即使 `/health` 正常，行情分析或 VaR 请求仍可能因数据源不可用而返回 `503`；VaR 的 `422` 可能表示对齐后样本不足。重定向和 HTML 登录页不算健康 API。本工具检查连通性和响应一致性，不替代独立量化正确性审计、行情新鲜度核验或浏览器界面测试。
 
 ## 数据来源与样本
 

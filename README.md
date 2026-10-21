@@ -233,16 +233,18 @@ With backend dependencies installed, run this from `backend/`:
 # Local API and browser origin; no Yahoo or LLM calls
 python -m scripts.check_deployment
 
-# Published API, including an optional historical-data request
+# Published API, including historical analysis and rolling VaR/Kupiec validation
 python -m scripts.check_deployment \
   --api-url https://balanced-intuition-production-6020.up.railway.app \
   --origin https://risklens-ai-portfolio-risk-terminal.tianlu923.chatgpt.site \
-  --include-market-data --timeout 60
+  --include-market-data --include-var-backtest --timeout 60
 ```
 
 The check verifies the RiskLens health response, browser CORS preflight, actual-response CORS headers, and a typed hypothetical stress response. `--include-market-data` also submits the default portfolio to `/portfolio/analyze`; it may use cached history or fetch Yahoo data. No AI endpoint is called, no portfolio is saved, and no deployment settings are changed.
 
-Exit code `0` means the requested checks passed; `1` identifies a failed check; `2` means invalid command arguments. A connection failure points to the API URL, TLS, timeout, or service availability. CORS failures point to backend `CORS_ORIGINS`. A market-analysis `503` can mean the data provider is unavailable even when `/health` passes. Redirects and HTML login pages do not count as a healthy API. This is a connectivity/response-contract check, not a numerical audit, freshness guarantee, or browser UI test.
+`--include-var-backtest` independently checks `/portfolio/var-backtest`, including that route's preflight and response CORS headers. It requests the default portfolio with three years of history, a 252-day training window, and 95% VaR. It verifies the Kupiec response contract, reconciles sample sizes and breach summaries with daily records, checks training chronology and signed losses, and confirms the reported decision matches the unrounded p-value. A missing Kupiec field (for example, an older backend) fails the check. A valid **rejection** of the coverage null does not fail deployment. This option may fetch Yahoo history; neither history option runs unless explicitly selected. The check does not recompute VaR quantiles or the Kupiec likelihood ratio.
+
+Exit code `0` means the requested checks passed; `1` identifies a failed check; `2` means invalid command arguments. A connection failure points to the API URL, TLS, timeout, or service availability. CORS failures point to backend `CORS_ORIGINS`. Analysis or VaR requests can return `503` when the data provider is unavailable even if `/health` passes; a VaR `422` can mean insufficient aligned history. Redirects and HTML login pages do not count as a healthy API. This is a connectivity/response-consistency check, not an independent numerical audit, freshness guarantee, or browser UI test.
 
 ## Data provenance
 
