@@ -12,6 +12,7 @@ from app.api.backtest import router as backtest_router
 from app.api.optimization import router as optimization_router
 from app.api.portfolio import router as portfolio_router
 from app.api.stress import router as stress_router
+from app.api.var_backtest import router as var_backtest_router
 from app.models.responses import HealthResponse
 
 APP_VERSION = "0.6.0"
@@ -41,6 +42,7 @@ app.include_router(stress_router)
 app.include_router(ai_router)
 app.include_router(optimization_router)
 app.include_router(backtest_router)
+app.include_router(var_backtest_router)
 
 
 @app.get("/health", response_model=HealthResponse, tags=["system"])

@@ -24,6 +24,7 @@ RiskLens 是面向股票与 ETF 投资组合的全栈风险分析项目。用户
 | 因子暴露 | 以 SPY 为市场代理的历史回归：beta、alpha、R²、残差波动率及 60 日滚动 beta；不伪造 SMB/HML。 |
 | 组合优化 | 仅做多的最小波动率、最大 Sharpe、风险平价，可设置单一持仓上限；不会自动改动用户组合。 |
 | 滚动回测 | 用过去数据拟合、在后续日期测试；模拟权重漂移、月度调仓、可配置交易成本，并与固定目标权重组合比较。 |
+| VaR 检验 | 用此前的滚动窗口估计单日历史 VaR，与下一日实际观测损失比较；报告突破次数、比例及逐日预测记录。 |
 
 默认组合：**AAPL 20% · MSFT 20% · NVDA 15% · SPY 25% · TLT 20%**。
 
@@ -41,12 +42,14 @@ flowchart TB
     ALIGN --> RISK[风险指标 + SPY 因子回归]
     ALIGN --> OPT[受约束组合优化]
     ALIGN --> BACK[滚动样本外回测]
+    ALIGN --> VAR[滚动历史 VaR 检验]
     API --> STRESS[确定性压力测试引擎]
     API -->|自然语言情景| PARSER[规则解析器或可选 LLM 解析器]
     PARSER -->|经验证的结构化输入| STRESS
     RISK --> RESULTS[Python 计算结果 + 数据来源]
     OPT --> RESULTS
     BACK --> RESULTS
+    VAR --> RESULTS
     STRESS --> RESULTS
     RESULTS --> OFFICER[风险官：定性解释]
     OFFICER -->|不独立计算金融数值| API
@@ -83,6 +86,14 @@ flowchart LR
 
 **示例结果，并非业绩承诺：** 使用截至 2026-10-14 可取得的数据，默认组合的最小波动率滚动测试覆盖 2025-10-10 至 2026-10-13（253 个前向交易日、13 个窗口）。在模型设定的 10 bps 交易成本下，优化策略的模拟累计收益为 **−0.94%**，固定原目标权重组合为 **+14.06%**。即使优化策略落后，也如实报告；结果会随数据、输入和假设而变化。
 
+### 滚动历史 VaR 检验
+
+对每个测试日 `t`，仅使用此前 `window_days` 个对齐后的组合日收益，即切片 `[t − window_days:t]`，以线性插值计算单日 `VaR_t = −quantile(returns, 1 − confidence_level)`。训练窗口在 `t` 之前结束，不包含当天或之后的收益。只有 `−r_p,t > VaR_t` 时才记为突破；相等不算突破，负的 VaR 阈值会原样保留，不截为零。当前组合权重保持固定，假设每日恢复目标权重且不计交易成本。这是基于历史数据的假设性检验，不代表实际交易，也不保证未来的风险覆盖能力。
+
+默认训练窗口为 252 个日收益（可选范围为 60–1260），其后至少需要 20 个样本外日收益。`data_quality.observations`、`start_date` 和 `end_date` 描述包含训练期在内的全部对齐收益样本；`test_observations`、`test_start` 和 `test_end` 仅描述接受检验的预测日。逐日记录包含训练起止日期、带符号的 VaR 阈值、观测收益／损失及突破标记。数据源元数据原样传递。
+
+名义预期突破比例为 `1 − confidence_level`，预期次数为该比例乘以测试观测数。测试少于 252 天或预期突破次数低于 5 时会给出提示。样本较少、尾部分位精度有限、训练窗口重叠以及收益序列相关性都会限制结果的解释范围。次数和比例仅作描述；本版本尚不提供 Kupiec 检验、统计显著性结果或通过／不通过判定。
+
 ## 主要量化定义
 
 设对齐后的资产日收益为 `r_t`，组合权重为 `w`，年化协方差为 `Sigma_ann = 252 × Cov(r)`：
@@ -93,7 +104,7 @@ flowchart LR
 | 几何年化收益 | `R_ann = [逐日连乘 (1 + r_p,t)]^(252/T) − 1` |
 | 年化波动率 | `sigma_p = sqrt(wᵀ Sigma_ann w)` |
 | Sharpe 估计 | `(R_ann − R_f) / sigma_p` |
-| 历史 95% 单日 VaR / CVaR | 负的 5% 分位收益 / 该分位以下收益的负均值，界面按损失幅度展示。 |
+| 历史 95% 单日 VaR / CVaR | 负的 5% 分位收益 / 该分位以下收益的负均值，按损失口径展示，保留可能为负的数值。 |
 | 最大回撤 | `V_t / max(V_s，s ≤ t) − 1` 的最小值；初始净值也计入历史高点。 |
 | 波动率风险贡献比例 | `w_i (Sigma_ann w)_i / (wᵀ Sigma_ann w)`，比例之和约为 1。 |
 | 有效持仓数 | `1 / sum_i(w_i²)` |
@@ -106,10 +117,10 @@ flowchart LR
 
 ```text
 backend/
-  app/api/             风险分析、压力测试、风险官、优化、回测 API
+  app/api/             风险分析、压力测试、风险官、优化、回测及 VaR 检验 API
   app/models/          Pydantic 输入输出模型
   app/data/            可替换的 Yahoo Finance 数据接口
-  app/risk/            确定性风险、因子与压力测试模块
+  app/risk/            确定性风险、因子、压力测试及滚动 VaR 检验模块
   app/optimization/    优化器与滚动回测模拟
   app/ai/              有边界的解析器与可选 LLM 适配器
   tests/               合成数据单元测试与 API 测试
@@ -157,6 +168,7 @@ pnpm dev
 | `POST /portfolio/stress-test` | 假设性冲击与损益归因。 |
 | `POST /portfolio/optimize` | 样本内优化对比。 |
 | `POST /portfolio/backtest` | 按时间顺序的滚动回测。 |
+| `POST /portfolio/var-backtest` | 对单日历史 VaR 进行滚动样本外检验。 |
 | `POST /ai/risk-officer` | 风险解释或情景翻译。 |
 | `GET /market/history/{ticker}` | 标准化价格历史。 |
 | `GET /health` | 服务状态与版本。 |
@@ -181,6 +193,19 @@ pnpm dev
   "cost_bps": 10
 }
 ```
+
+`/portfolio/var-backtest` 请求示例：
+
+```json
+{
+  "positions": [{"ticker": "SPY", "weight": 1.0}],
+  "lookback_years": 3,
+  "window_days": 252,
+  "confidence_level": 0.95
+}
+```
+
+该请求沿用 `/portfolio/analyze` 的组合输入校验。继承的 `risk_free_rate` 参数可以传入，但不参与计算，因为历史 VaR 使用组合原始收益。
 
 当前前端部署在 OpenAI Sites，FastAPI 后端部署在 Railway。换平台部署时，前端 `NEXT_PUBLIC_API_URL` 应填**公开的 HTTPS 后端地址**，不可填 localhost；后端 `CORS_ORIGINS` 应填准确的前端来源。若启用可选 LLM，`OPENAI_API_KEY` 只能配置在后端。本版本没有用户账户和云端保存组合。
 
@@ -207,7 +232,7 @@ python -m scripts.check_deployment \
 
 历史行情缓存保存在各后端进程内，有效期为 15 分钟，默认最多保留 128 个组合／日期区间条目。请求时清理过期条目；容量满后淘汰最久未使用的条目。缓存命中不延长原有效期。条目上限限制的是保留的历史快照，不等于进程总内存或并发下载上限。
 
-中英文数据面板区分历史日度行情、合成演示数据和假设模型结果。分析、优化、回测响应新增可选的 `data_quality.provenance`，记录数据源获取时间（UTC）、缓存命中及有效期、价格口径、对齐后的价格日期和逐资产覆盖信息。缓存命中保留最初获取时间，不代表新报价。旧后端未提供元数据时显示“未提供”，不编造时间。
+中英文数据面板区分历史日度行情、合成演示数据和假设模型结果。分析、优化、组合回测及 VaR 检验响应包含可选的 `data_quality.provenance`，记录数据源获取时间（UTC）、缓存命中及有效期、价格口径、对齐后的价格日期和逐资产覆盖信息。缓存命中保留最初获取时间，不代表新报价。旧后端未提供元数据时显示“未提供”，不编造时间。
 
 实际样本数量指**日收益观测数**，不是价格行数，也不等于请求年数。回测样本包含训练和测试数据，样本外测试天数另行显示。缺失统计仅基于数据源返回的日期，不是完整交易日历核验。短缺口最多前向填充三行，仍不完整的日期被剔除；界面披露保留样本的填充数量及各资产最后有效价格日期。本次不改变计算公式或现有对齐规则。
 

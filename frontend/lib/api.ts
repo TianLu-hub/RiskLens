@@ -10,6 +10,10 @@ import type {
   StressTestRequest,
   StressTestResult,
 } from '@/lib/types';
+import type {
+  VarBacktestRequest,
+  VarBacktestResponse,
+} from '@/lib/var-backtest';
 
 const CONFIGURED_API_BASE_URL = process.env.NEXT_PUBLIC_API_URL?.replace(
   /\/$/,
@@ -150,6 +154,53 @@ export async function backtestPortfolio(
     throw new ApiError(message, response.status);
   }
   return response.json() as Promise<BacktestResult>;
+}
+
+export async function backtestVarPortfolio(
+  payload: VarBacktestRequest,
+  signal?: AbortSignal,
+): Promise<VarBacktestResponse> {
+  const apiBaseUrl = getApiBaseUrl();
+  let response: Response;
+  try {
+    response = await fetch(`${apiBaseUrl}/portfolio/var-backtest`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+      signal,
+    });
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'AbortError')
+      throw error;
+    throw new ApiError('The Python VaR backtest service could not be reached.');
+  }
+  if (!response.ok) {
+    const body = (await response.json().catch(() => null)) as {
+      detail?:
+        | string
+        | Array<{ msg?: string }>
+        | { message?: string; code?: string };
+    } | null;
+    const detail = body?.detail;
+    const message =
+      typeof detail === 'string'
+        ? detail
+        : Array.isArray(detail)
+          ? detail
+              .map((item) => item.msg)
+              .filter(Boolean)
+              .join('; ')
+          : (detail?.message ??
+            `VaR backtest failed with status ${response.status}.`);
+    throw new ApiError(
+      message,
+      response.status,
+      !Array.isArray(detail) && typeof detail === 'object'
+        ? detail?.code
+        : undefined,
+    );
+  }
+  return response.json() as Promise<VarBacktestResponse>;
 }
 
 export async function runStressTest(

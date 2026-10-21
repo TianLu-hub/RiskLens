@@ -24,6 +24,7 @@ Click the ⓘ beside a metric to read its definition, formula, interpretation, a
 | Factor exposure | Historical regression against SPY: beta, alpha, R², residual volatility, and rolling 60-day beta. SMB/HML are not fabricated. |
 | Optimization | Long-only minimum volatility, maximum Sharpe, and risk parity with optional position caps. Results never change holdings automatically. |
 | Walk-forward test | Refit on trailing data and evaluate only on later dates; model weight drift, monthly rebalancing, configurable costs, and a fixed-weight baseline. |
+| VaR validation | Estimate one-day historical VaR from a rolling prior window and compare it with the next observed loss; report breach counts, rates, and dated forecasts. |
 
 Default portfolio: **AAPL 20% · MSFT 20% · NVDA 15% · SPY 25% · TLT 20%**.
 
@@ -41,12 +42,14 @@ flowchart TB
     ALIGN --> RISK[Risk metrics + SPY factor regression]
     ALIGN --> OPT[Constrained optimizer]
     ALIGN --> BACK[Walk-forward backtest]
+    ALIGN --> VAR[Rolling historical VaR validation]
     API --> STRESS[Deterministic stress engine]
     API -->|Natural-language scenario| PARSER[Bounded parser or optional LLM parser]
     PARSER -->|Validated structured input| STRESS
     RISK --> RESULTS[Python-calculated results + provenance]
     OPT --> RESULTS
     BACK --> RESULTS
+    VAR --> RESULTS
     STRESS --> RESULTS
     RESULTS --> OFFICER[Risk Officer: qualitative explanation]
     OFFICER -->|No independent numerical calculation| API
@@ -83,6 +86,14 @@ Each fold's training period ends **before** its test period begins. The default 
 
 **Illustrative result, not a performance claim:** On the default portfolio with data available on 2026-10-14, the minimum-volatility walk-forward test covered 2025-10-10–2026-10-13 (253 forward trading days, 13 windows). With 10 bps modeled trading costs, the optimized strategy's simulated cumulative return was **−0.94%**, versus **+14.06%** for the fixed-current-weight baseline. The result is deliberately reported even though the optimizer underperformed; it changes with data, inputs, and assumptions.
 
+### Rolling historical VaR validation
+
+For each test day `t`, use exactly the preceding `window_days` aligned portfolio returns, the slice `[t − window_days:t]`, to estimate one-day `VaR_t = −quantile(returns, 1 − confidence_level)` with linear interpolation. The training window ends before `t`; neither that day's return nor any later return enters its forecast. A breach occurs only when `−r_p,t > VaR_t`. Equality is not a breach, and negative VaR thresholds are retained rather than clamped to zero. The current portfolio weights remain fixed, modeling daily rebalancing without transaction costs. This is a hypothetical historical validation, not actual trading or a guarantee of future risk coverage.
+
+The default window is 252 daily returns (allowed range: 60–1260), and at least 20 subsequent out-of-sample returns are required. `data_quality.observations`, `start_date`, and `end_date` describe the whole aligned return sample, including training; `test_observations`, `test_start`, and `test_end` describe only the evaluated forecast days. Each series point includes its training dates, signed VaR threshold, realized return/loss, and breach flag. Provider provenance is passed through unchanged.
+
+The nominal expected breach rate is `1 − confidence_level`; the expected count is that rate times the number of test observations. Warnings identify fewer than 252 test days or an expected count below 5. Small samples, limited tail resolution, overlapping training windows, and dependent returns restrict interpretation. Counts are descriptive: this version includes no Kupiec test, statistical significance result, or pass/fail judgment.
+
 ## Quantitative definitions
 
 For aligned daily asset returns `r_t`, weights `w`, and annualized covariance `Sigma_ann = 252 × Cov(r)`:
@@ -93,7 +104,7 @@ For aligned daily asset returns `r_t`, weights `w`, and annualized covariance `S
 | Geometric annualized return | `R_ann = [product over t of (1 + r_p,t)]^(252/T) − 1` |
 | Annualized volatility | `sigma_p = sqrt(wᵀ Sigma_ann w)` |
 | Sharpe estimate | `(R_ann − R_f) / sigma_p` |
-| Historical 95% one-day VaR / CVaR | Negative fifth-percentile return / negative mean return below that threshold, displayed as loss magnitudes. |
+| Historical 95% one-day VaR / CVaR | Negative fifth-percentile return / negative mean return below that threshold, reported in loss terms; negative values are retained. |
 | Maximum drawdown | Minimum of `V_t / max(V_s for s ≤ t) − 1`, including initial wealth in the high-water mark. |
 | Volatility-risk share | `w_i (Sigma_ann w)_i / (wᵀ Sigma_ann w)`; shares sum to approximately one. |
 | Effective positions | `1 / sum_i(w_i²)` |
@@ -106,10 +117,10 @@ Optimization uses SciPy SLSQP with `sum_i(w_i) = 1`, `w_i ≥ 0`, and optional `
 
 ```text
 backend/
-  app/api/             Analysis, stress, officer, optimization, backtest routes
+  app/api/             Analysis, stress, officer, optimization, backtest, VaR validation routes
   app/models/          Pydantic contracts
   app/data/            Replaceable Yahoo Finance provider
-  app/risk/            Deterministic risk, factor, and stress modules
+  app/risk/            Deterministic risk, factor, stress, and rolling VaR validation modules
   app/optimization/    Optimizer and walk-forward simulation
   app/ai/              Bounded parser and optional LLM adapter
   tests/               Synthetic-fixture unit and API tests
@@ -157,6 +168,7 @@ Alternatively, run `docker compose up --build` at the repository root; the front
 | `POST /portfolio/stress-test` | Hypothetical shocks and P&L attribution. |
 | `POST /portfolio/optimize` | In-sample allocation comparison. |
 | `POST /portfolio/backtest` | Chronological walk-forward comparison. |
+| `POST /portfolio/var-backtest` | Rolling out-of-sample validation of one-day historical VaR. |
 | `POST /ai/risk-officer` | Risk interpretation or scenario translation. |
 | `GET /market/history/{ticker}` | Normalized price history. |
 | `GET /health` | Service liveness and version. |
@@ -181,6 +193,19 @@ Example `/portfolio/backtest` request:
   "cost_bps": 10
 }
 ```
+
+Example `/portfolio/var-backtest` request:
+
+```json
+{
+  "positions": [{"ticker": "SPY", "weight": 1.0}],
+  "lookback_years": 3,
+  "window_days": 252,
+  "confidence_level": 0.95
+}
+```
+
+This request uses the same portfolio input validation as `/portfolio/analyze`. The inherited `risk_free_rate` input is accepted but unused: historical VaR uses raw portfolio returns.
 
 The frontend is deployed as an OpenAI Site and the FastAPI backend on Railway. For another deployment, set frontend `NEXT_PUBLIC_API_URL` to the backend's **public HTTPS origin**, never localhost; set backend `CORS_ORIGINS` to the exact frontend origin. Keep any optional `OPENAI_API_KEY` on the backend only. Saved accounts and portfolios are not part of this release.
 
@@ -207,7 +232,7 @@ Exit code `0` means the requested checks passed; `1` identifies a failed check; 
 
 Market-history caching is process-local: a 15-minute TTL and a default cap of 128 portfolio/date-range entries. Requests remove expired entries; when full, the least recently used entry is evicted. Cache hits do not extend the original expiry. The entry cap limits retained snapshots, not total process memory or concurrent downloads.
 
-The bilingual data panel distinguishes historical daily prices, synthetic demo data, and hypothetical model results. Analysis, optimization, and backtest responses include optional `data_quality.provenance`: provider fetch time (UTC), cache hit/TTL, price basis, aligned price dates, and per-asset coverage. A cache hit retains the original fetch time; it is not a new quote. Legacy providers without metadata show “Not reported”, never a fabricated timestamp.
+The bilingual data panel distinguishes historical daily prices, synthetic demo data, and hypothetical model results. Analysis, optimization, allocation backtest, and VaR validation responses include optional `data_quality.provenance`: provider fetch time (UTC), cache hit/TTL, price basis, aligned price dates, and per-asset coverage. A cache hit retains the original fetch time; it is not a new quote. Legacy providers without metadata show “Not reported”, never a fabricated timestamp.
 
 The actual sample count is daily **returns**, not price rows or the requested number of years. Backtest metadata includes both training and test data; the forward-test panel separately reports test days. Missingness counts use provider-returned dates, not a full exchange-calendar audit. Up to three missing rows are forward-filled, remaining incomplete dates are excluded, and the retained fill count and each asset's last observed date are disclosed. Calculations and existing alignment rules are unchanged.
 

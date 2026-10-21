@@ -19,6 +19,7 @@ import { DrawdownChart } from '@/components/DrawdownChart';
 import { FactorExposureChart } from '@/components/FactorExposureChart';
 import { OptimizationPanel } from '@/components/OptimizationPanel';
 import { BacktestPanel } from '@/components/BacktestPanel';
+import { VarBacktestPanel } from '@/components/VarBacktestPanel';
 import { PortfolioEditor } from '@/components/PortfolioEditor';
 import { RiskContributionChart } from '@/components/RiskContributionChart';
 import { RiskFlags } from '@/components/RiskFlags';
@@ -232,13 +233,16 @@ export function RiskDashboard() {
             <span
               className={`size-1.5 rounded-full ${mode === 'live' ? 'bg-emerald-400' : 'bg-amber-300'}`}
             />
-            {activeSection === 'stress-testing'
-              ? dataCopy.stressBadge
-              : activeSection === 'optimization' || activeSection === 'backtest'
-                ? dataCopy.simulationBadge
-                : mode === 'live'
-                  ? t('HISTORICAL DATA')
-                  : t('DEMO SNAPSHOT')}
+            {activeSection === 'var-backtest'
+              ? t('MODEL VALIDATION')
+              : activeSection === 'stress-testing'
+                ? dataCopy.stressBadge
+                : activeSection === 'optimization' ||
+                    activeSection === 'backtest'
+                  ? dataCopy.simulationBadge
+                  : mode === 'live'
+                    ? t('HISTORICAL DATA')
+                    : t('DEMO SNAPSHOT')}
           </Badge>
         </div>
       </header>
@@ -385,7 +389,7 @@ export function RiskDashboard() {
                 </p>
               </div>
             )}
-          {inputsDirty && (
+          {inputsDirty && activeSection !== 'var-backtest' && (
             <output className="mb-3 flex items-start gap-2 border border-primary/30 bg-primary/5 px-3 py-2.5 text-xs leading-5 text-foreground">
               <Info
                 className="mt-0.5 size-4 shrink-0 text-primary"
@@ -405,7 +409,7 @@ export function RiskDashboard() {
               </p>
             </output>
           )}
-          {error && (
+          {error && activeSection !== 'var-backtest' && (
             <Alert variant="destructive" className="mb-3 rounded-sm">
               <AlertTriangle />
               <AlertTitle>{t('Analysis unavailable')}</AlertTitle>
@@ -508,6 +512,13 @@ export function RiskDashboard() {
               positions={positions}
               lookbackYears={lookbackYears}
               riskFreeRate={riskFreeRate}
+            />
+          </div>
+          <div hidden={activeSection !== 'var-backtest'}>
+            <VarBacktestPanel
+              positions={positions}
+              lookbackYears={lookbackYears}
+              active={activeSection === 'var-backtest'}
             />
           </div>
           <footer className="mt-5 flex flex-wrap items-center justify-between gap-2 border-t border-border py-3 text-xs text-muted-foreground">

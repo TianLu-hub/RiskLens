@@ -7,6 +7,7 @@ import {
   BrainCircuit,
   FlaskConical,
   History,
+  ShieldCheck,
   SlidersHorizontal,
 } from 'lucide-react';
 import {
@@ -49,6 +50,13 @@ export const workspaceViews = [
     title: 'Walk-forward backtest',
     description: 'Train on the past. Evaluate on subsequent observations.',
     icon: History,
+  },
+  {
+    id: 'var-backtest',
+    label: 'VaR validation',
+    title: 'VaR model backtest',
+    description: 'Compare past-only risk estimates with the next trading day.',
+    icon: ShieldCheck,
   },
   {
     id: 'risk-officer',

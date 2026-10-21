@@ -4,6 +4,7 @@ export const workspaceSections = [
   'factor-exposure',
   'optimization',
   'backtest',
+  'var-backtest',
   'risk-officer',
 ] as const;
 export type WorkspaceSection = (typeof workspaceSections)[number];

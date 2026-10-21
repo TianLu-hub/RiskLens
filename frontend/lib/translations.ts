@@ -7,6 +7,11 @@ export const zhMessages: Record<string, string> = {
   'Factor exposure': '因子暴露',
   Optimization: '组合优化',
   Backtest: '样本外回测',
+  'VaR validation': 'VaR 验证',
+  'VaR model backtest': 'VaR 风险模型回测',
+  'Compare past-only risk estimates with the next trading day.':
+    '只用过去数据估计风险，再与下一交易日的实际收益比较。',
+  'MODEL VALIDATION': '模型验证',
   'Risk Officer': '风险官',
   'Portfolio overview': '组合风险总览',
   'Historical risk, in perspective.': '从历史数据理解组合风险。',
