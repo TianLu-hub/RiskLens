@@ -19,6 +19,12 @@ import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { runStressTest } from '@/lib/api';
 import {
+  overrideDrafts,
+  tickerShockInputs,
+  toggleOverride,
+  type TickerOverrideDrafts,
+} from '@/lib/stress-overrides';
+import {
   DEMO_STRESS_RESULT,
   STRESS_PRESETS,
   type StressPreset,
@@ -56,9 +62,9 @@ export function StressTestPanel({ positions }: { positions: PositionInput[] }) {
   const [marketPct, setMarketPct] = useState(defaultPreset.marketPct);
   const [techPct, setTechPct] = useState(defaultPreset.techPct);
   const [ratesBps, setRatesBps] = useState(defaultPreset.ratesBps);
-  const [tickerShocksPct, setTickerShocksPct] = useState<
-    Record<string, number>
-  >(defaultPreset.tickerShocksPct);
+  const [tickerShocksPct, setTickerShocksPct] = useState<TickerOverrideDrafts>(
+    () => overrideDrafts(defaultPreset.tickerShocksPct),
+  );
   const [portfolioValue, setPortfolioValue] = useState(100_000);
   const [result, setResult] = useState<StressTestResult>(DEMO_STRESS_RESULT);
   const [resultMode, setResultMode] = useState<'demo' | 'computed'>('demo');
@@ -92,12 +98,12 @@ export function StressTestPanel({ positions }: { positions: PositionInput[] }) {
     setMarketPct(preset.marketPct);
     setTechPct(preset.techPct);
     setRatesBps(preset.ratesBps);
-    setTickerShocksPct(preset.tickerShocksPct);
+    setTickerShocksPct(overrideDrafts(preset.tickerShocksPct));
     setInputsChanged(true);
     setError(null);
   }
 
-  function updateTickerShock(ticker: string, value: number) {
+  function updateTickerShock(ticker: string, value: string) {
     setTickerShocksPct((current) => ({ ...current, [ticker]: value }));
     markChanged();
   }
@@ -111,15 +117,13 @@ export function StressTestPanel({ positions }: { positions: PositionInput[] }) {
       return;
     }
 
-    const tickerShocks = Object.fromEntries(
-      tickers
-        .filter(
-          (ticker) =>
-            Number.isFinite(tickerShocksPct[ticker]) &&
-            Math.abs(tickerShocksPct[ticker]) > 0,
-        )
-        .map((ticker) => [ticker, tickerShocksPct[ticker] / 100]),
-    );
+    let tickerShocks: Record<string, number>;
+    try {
+      tickerShocks = tickerShockInputs(tickers, tickerShocksPct);
+    } catch (reason) {
+      setError((reason as Error).message);
+      return;
+    }
 
     setIsLoading(true);
     setError(null);
@@ -307,37 +311,85 @@ export function StressTestPanel({ positions }: { positions: PositionInput[] }) {
                   {t('Overrides factor total')}
                 </span>
               </div>
+              <p
+                id="stress-ticker-help"
+                className="mt-2 text-xs leading-relaxed text-muted-foreground"
+              >
+                {t(
+                  'Check a ticker to replace its total shock. Unchecked uses factor shocks; enabled 0% keeps that asset unchanged.',
+                )}
+              </p>
               <div className="mt-2 grid grid-cols-2 gap-1.5 sm:grid-cols-3 xl:grid-cols-2">
-                {cleanPositions.map((position) => (
-                  <label
-                    key={position.ticker}
-                    className="flex items-center border border-border bg-background px-2 py-1.5"
-                  >
-                    <span className="min-w-0 flex-1 truncate font-mono text-[12px] text-foreground">
-                      {position.ticker || '—'}
-                    </span>
-                    <Input
-                      type="number"
-                      min="-100"
-                      max="100"
-                      step="1"
-                      value={tickerShocksPct[position.ticker] ?? 0}
-                      onChange={(event) =>
-                        updateTickerShock(
-                          position.ticker,
-                          Number(event.target.value),
-                        )
-                      }
-                      aria-label={t('{ticker} stress percent', {
-                        ticker: position.ticker,
-                      })}
-                      className="h-6 w-16 rounded-sm border-0 bg-transparent p-0 text-right font-mono text-[12px] shadow-none focus-visible:ring-0"
-                    />
-                    <span className="ml-1 text-[11px] text-muted-foreground">
-                      %
-                    </span>
-                  </label>
-                ))}
+                {cleanPositions.map((position) => {
+                  const enabled = Object.hasOwn(
+                    tickerShocksPct,
+                    position.ticker,
+                  );
+                  return (
+                    <div
+                      key={position.ticker}
+                      className="border border-border bg-background px-2 py-2"
+                    >
+                      <label className="flex cursor-pointer items-center gap-2 font-mono text-[12px] text-foreground">
+                        <input
+                          type="checkbox"
+                          checked={enabled}
+                          disabled={isLoading || !position.ticker}
+                          onChange={(event) => {
+                            setTickerShocksPct((current) =>
+                              toggleOverride(
+                                current,
+                                position.ticker,
+                                event.target.checked,
+                              ),
+                            );
+                            markChanged();
+                          }}
+                          aria-label={t('Override {ticker} total shock', {
+                            ticker: position.ticker,
+                          })}
+                          aria-describedby="stress-ticker-help"
+                          className="size-4 shrink-0 accent-sky-300 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-300"
+                        />
+                        <span className="truncate">
+                          {position.ticker || '—'}
+                        </span>
+                      </label>
+                      <div className="mt-2 flex items-center gap-1">
+                        <Input
+                          type="number"
+                          min="-100"
+                          max="100"
+                          step="1"
+                          disabled={!enabled || isLoading}
+                          value={
+                            enabled ? tickerShocksPct[position.ticker] : ''
+                          }
+                          placeholder="—"
+                          onChange={(event) =>
+                            updateTickerShock(
+                              position.ticker,
+                              event.target.value,
+                            )
+                          }
+                          aria-label={t('{ticker} stress percent', {
+                            ticker: position.ticker,
+                          })}
+                          aria-describedby="stress-ticker-help"
+                          className="h-7 min-w-0 flex-1 rounded-sm px-2 text-right font-mono text-[12px]"
+                        />
+                        <span className="ml-1 text-[11px] text-muted-foreground">
+                          %
+                        </span>
+                      </div>
+                      <p className="mt-1 text-[11px] text-muted-foreground">
+                        {enabled
+                          ? t('Total shock override')
+                          : t('Uses factor shocks')}
+                      </p>
+                    </div>
+                  );
+                })}
               </div>
             </div>
 

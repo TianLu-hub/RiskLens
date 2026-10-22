@@ -322,6 +322,13 @@ export const zhMessages: Record<string, string> = {
   'Portfolio value': '组合金额（美元）',
   'Ticker-specific total shock': '单一资产总冲击',
   'Overrides factor total': '覆盖因子冲击合计',
+  'Check a ticker to replace its total shock. Unchecked uses factor shocks; enabled 0% keeps that asset unchanged.':
+    '勾选资产以覆盖其总冲击。未勾选时沿用因子冲击；勾选并填入 0% 表示该资产价格不变。',
+  'Override {ticker} total shock': '覆盖 {ticker} 总冲击',
+  'Total shock override': '已覆盖总冲击',
+  'Uses factor shocks': '沿用因子冲击',
+  'Enter a total shock between -100% and 100% for every enabled ticker override. Blank is not 0%.':
+    '请为每个已勾选资产输入 -100% 至 100% 的总冲击。空白不代表 0%。',
   '{ticker} stress percent': '{ticker} 冲击百分比',
   'Inputs changed · run to refresh results': '输入已更改 · 运行以更新结果',
   'Stress test results': '压力测试结果',

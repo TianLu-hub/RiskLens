@@ -42,6 +42,57 @@ def test_ticker_shock_applies_weighted_contribution_and_overrides_market() -> No
     assert result.estimated_portfolio_return == pytest.approx(-0.16)
 
 
+@pytest.mark.parametrize(
+    ("ticker", "inherited_return"), [("NVDA", -0.25), ("TLT", -0.16)]
+)
+def test_explicit_zero_cancels_factor_shocks_while_omitted_ticker_inherits(
+    ticker: str,
+    inherited_return: float,
+) -> None:
+    payload = {
+        "positions": [
+            {"ticker": ticker, "weight": 0.4},
+            {"ticker": "SPY", "weight": 0.6},
+        ],
+        "portfolio_value": 100_000,
+        "market_shock": -0.10,
+        "tech_shock": -0.15,
+        "rates_shock_bps": 100,
+    }
+    inherited = run_stress_test(StressTestRequest.model_validate(payload))
+    overridden = run_stress_test(
+        StressTestRequest.model_validate(payload | {"ticker_shocks": {ticker: 0.0}})
+    )
+    inherited_assets = {item.ticker: item for item in inherited.asset_contributions}
+    overridden_assets = {item.ticker: item for item in overridden.asset_contributions}
+    asset = overridden_assets[ticker]
+
+    assert inherited.scenario_inputs.ticker_shocks == {}
+    assert inherited_assets[ticker].estimated_asset_return == pytest.approx(
+        inherited_return
+    )
+    assert overridden.scenario_inputs.ticker_shocks == {ticker: 0.0}
+    assert asset.estimated_asset_return == 0.0
+    assert asset.portfolio_contribution == 0.0
+    assert asset.estimated_dollar_pnl == 0.0
+    assert asset.position_value_after == asset.position_value_before
+    assert asset.factor_shocks["ticker_specific"] == pytest.approx(-inherited_return)
+    assert sum(asset.factor_shocks.values()) == pytest.approx(0.0)
+    assert overridden_assets["SPY"] == inherited_assets["SPY"]
+    assert overridden_assets["SPY"].estimated_asset_return == pytest.approx(-0.145)
+    assert "ticker_specific" not in overridden_assets["SPY"].factor_shocks
+    assert overridden.estimated_portfolio_return == pytest.approx(0.6 * -0.145)
+    assert sum(
+        item.portfolio_contribution for item in overridden.asset_contributions
+    ) == pytest.approx(overridden.estimated_portfolio_return)
+    assert sum(
+        item.portfolio_contribution for item in overridden.factor_contributions
+    ) == pytest.approx(overridden.estimated_portfolio_return)
+    assert sum(
+        item.estimated_dollar_pnl for item in overridden.factor_contributions
+    ) == pytest.approx(overridden.estimated_dollar_pnl)
+
+
 def test_total_asset_and_factor_contributions_reconcile() -> None:
     request = StressTestRequest(
         positions=[
