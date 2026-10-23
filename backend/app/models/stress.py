@@ -40,7 +40,16 @@ class StressTestRequest(BaseModel):
                 raise ValueError(
                     "Ticker shock keys must contain only letters, numbers, dots, or hyphens"
                 )
-            shock = float(raw_shock)
+            if ticker in normalized:
+                raise ValueError("Each ticker shock may appear only once")
+            # bool is a numeric subtype in Python, but not a financial shock.
+            if isinstance(raw_shock, bool):
+                raise ValueError("Ticker shocks must be numeric, not boolean")
+            try:
+                shock = float(raw_shock)
+            except (TypeError, ValueError, OverflowError) as exc:
+                # Pydantic does not turn TypeError into a validation response.
+                raise ValueError("Ticker shocks must be numeric") from exc
             if not -1.0 <= shock <= 1.0:
                 raise ValueError("Ticker shocks must be between -1.0 and 1.0")
             normalized[ticker] = shock

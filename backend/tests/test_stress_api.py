@@ -8,6 +8,52 @@ from fastapi.testclient import TestClient
 from app.main import app
 
 
+@pytest.mark.parametrize(
+    "shock", [None, [], {}, True, False, "", "invalid", "NaN", "Infinity", 1.01, -1.01]
+)
+def test_stress_api_rejects_invalid_ticker_shock_values(shock: object) -> None:
+    response = TestClient(app, raise_server_exceptions=False).post(
+        "/portfolio/stress-test",
+        json={
+            "positions": [{"ticker": "SPY", "weight": 1.0}],
+            "market_shock": -0.10,
+            "ticker_shocks": {"SPY": shock},
+        },
+    )
+
+    assert response.status_code == 422
+    assert response.json()["detail"][0]["loc"] == ["body", "ticker_shocks"]
+
+
+def test_stress_api_rejects_normalized_duplicate_overrides() -> None:
+    response = TestClient(app).post(
+        "/portfolio/stress-test",
+        json={
+            "positions": [{"ticker": "SPY", "weight": 1.0}],
+            "ticker_shocks": {"SPY": -0.10, " spy ": -0.20},
+        },
+    )
+
+    assert response.status_code == 422
+    assert "only once" in response.json()["detail"][0]["msg"]
+
+
+@pytest.mark.parametrize("shock", [-1, 0, 1, -0.15, "-0.15"])
+def test_stress_api_accepts_numeric_ticker_shocks(shock: float | str) -> None:
+    response = TestClient(app).post(
+        "/portfolio/stress-test",
+        json={
+            "positions": [{"ticker": "SPY", "weight": 1.0}],
+            "market_shock": -0.10,
+            "ticker_shocks": {" spy ": shock},
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["scenario_inputs"]["ticker_shocks"] == {"SPY": float(shock)}
+    assert response.json()["estimated_portfolio_return"] == pytest.approx(float(shock))
+
+
 def test_stress_test_endpoint() -> None:
     client = TestClient(app)
     response = client.post(
