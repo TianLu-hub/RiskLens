@@ -235,17 +235,24 @@ class YahooFinanceProvider(MarketDataProvider):
 
     @staticmethod
     def _extract_adjusted_close(raw: pd.DataFrame, tickers: list[str]) -> pd.DataFrame:
+        fields = (
+            raw.columns.get_level_values(0)
+            if isinstance(raw.columns, pd.MultiIndex)
+            else raw.columns
+        )
+        if "Adj Close" not in fields and "Close" not in fields:
+            # A populated but incomplete provider response is not evidence that
+            # the requested ticker is invalid. Do not cache it or invent prices.
+            raise MarketDataUnavailableError(
+                "Market data did not include closing prices. Please try again."
+            )
+        field = "Adj Close" if "Adj Close" in fields else "Close"
         if isinstance(raw.columns, pd.MultiIndex):
-            level_zero = set(raw.columns.get_level_values(0))
-            field = "Adj Close" if "Adj Close" in level_zero else "Close"
             extracted = raw[field]
             if isinstance(extracted, pd.Series):
                 return extracted.to_frame(name=tickers[0])
             return extracted.rename(columns=str.upper)
 
-        field = "Adj Close" if "Adj Close" in raw.columns else "Close"
-        if field not in raw.columns:
-            return pd.DataFrame(index=raw.index)
         return raw[field].to_frame(name=tickers[0])
 
 
