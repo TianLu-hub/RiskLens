@@ -1,0 +1,88 @@
+name: Production API check
+
+on:
+  workflow_dispatch:
+    inputs:
+      include_market_data:
+        description: "Check historical analysis (may fetch Yahoo data)"
+        type: boolean
+        default: false
+      include_var_backtest:
+        description: "Check rolling VaR/Kupiec (may fetch Yahoo data)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-api-check
+  cancel-in-progress: false
+
+jobs:
+  check:
+    name: Read-only production API checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: backend
+        shell: bash
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install dependencies
+        run: python -m pip install -r requirements.txt
+
+      - name: Check published API
+        id: probe
+        env:
+          INCLUDE_MARKET_DATA: ${{ inputs.include_market_data }}
+          INCLUDE_VAR_BACKTEST: ${{ inputs.include_var_backtest }}
+        run: |
+          set -euo pipefail
+          args=(
+            --api-url https://balanced-intuition-production-6020.up.railway.app
+            --origin https://risklens-ai-portfolio-risk-terminal.tianlu923.chatgpt.site
+            --timeout 60
+          )
+          if [[ "$INCLUDE_MARKET_DATA" == "true" ]]; then
+            args+=(--include-market-data)
+          fi
+          if [[ "$INCLUDE_VAR_BACKTEST" == "true" ]]; then
+            args+=(--include-var-backtest)
+          fi
+          python -m scripts.check_deployment "${args[@]}" | tee "$RUNNER_TEMP/risklens-probe.txt"
+
+      - name: Summarize checks
+        if: always()
+        working-directory: ${{ runner.temp }}
+        env:
+          PROBE_OUTCOME: ${{ steps.probe.outcome }}
+          INCLUDE_MARKET_DATA: ${{ inputs.include_market_data }}
+          INCLUDE_VAR_BACKTEST: ${{ inputs.include_var_backtest }}
+        run: |
+          {
+            echo '## RiskLens production API check'
+            printf 'Probe outcome: **%s**\n\n' "$PROBE_OUTCOME"
+            printf 'Historical analysis requested: `%s`\n\n' "$INCLUDE_MARKET_DATA"
+            printf 'VaR/Kupiec requested: `%s`\n\n' "$INCLUDE_VAR_BACKTEST"
+            echo '```text'
+            if [[ -f "$RUNNER_TEMP/risklens-probe.txt" ]]; then
+              cat "$RUNNER_TEMP/risklens-probe.txt"
+            else
+              echo 'Probe did not run; inspect setup/install logs.'
+            fi
+            echo '```'
+            echo 'No deployment or AI calls. Passing checks do not verify the deployed commit, numerical accuracy, data freshness, or browser UI.'
+          } >> "$GITHUB_STEP_SUMMARY"

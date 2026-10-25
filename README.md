@@ -227,6 +227,8 @@ The frontend is deployed as an OpenAI Site and the FastAPI backend on Railway. F
 
 ### Check a deployment
 
+On GitHub, open **Actions → Production API check → Run workflow**, select `main`, and run the check. The default checks the published API's health, CORS, and hypothetical stress response. The two optional checkboxes independently enable historical analysis and rolling VaR/Kupiec; both are off by default to avoid unnecessary Yahoo requests. Results appear in the run summary, including failures. This is manual only, requires no API secrets, and does not deploy code. A green result does **not** prove that the latest GitHub commit is running on Railway.
+
 With backend dependencies installed, run this from `backend/`:
 
 ```bash

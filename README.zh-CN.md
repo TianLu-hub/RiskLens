@@ -227,6 +227,8 @@ pnpm dev
 
 ### 上线后检查
 
+在 GitHub 打开 **Actions → Production API check → Run workflow**，选择 `main` 后运行。默认检查线上 API 的健康状态、CORS 和假设压力测试响应。两个复选框可分别启用历史行情分析和 VaR/Kupiec 检查；默认均关闭，避免不必要的 Yahoo 请求。运行摘要会展示结果，失败时也会保留提示。此流程仅手动触发，不需要 API 密钥，也不会部署代码。检查通过**不代表** Railway 已运行最新 GitHub 提交。
+
 安装后端依赖后，在 `backend/` 目录运行：
 
 ```bash
