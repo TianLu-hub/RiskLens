@@ -8,8 +8,10 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from threading import Lock
 
+import numpy as np
 import pandas as pd
 import yfinance as yf
+from pandas.api.types import is_bool_dtype, is_complex_dtype, is_numeric_dtype
 
 from app.data.provenance import AssetCoverage, MarketDataProvenance
 
@@ -118,6 +120,7 @@ class YahooFinanceProvider(MarketDataProvider):
             raise InvalidTickerError(invalid)
 
         prices = prices[normalized].sort_index()
+        self._validate_observed_prices(prices)
         prices.index = pd.to_datetime(prices.index).tz_localize(None)
         original_counts = prices.notna().sum()
         original_prices = prices.copy()
@@ -232,6 +235,30 @@ class YahooFinanceProvider(MarketDataProvider):
                 else None
             ),
         )
+
+    @staticmethod
+    def _validate_observed_prices(prices: pd.DataFrame) -> None:
+        """Reject corrupt observations before alignment, filling, or caching.
+
+        Missing values retain the existing gap-handling policy. Invalid observed
+        prices are never silently converted to missing data or forward-filled.
+        """
+
+        message = (
+            "Market data contains invalid closing prices: observed prices must be "
+            "finite, numeric, and strictly positive. Please try again."
+        )
+        if any(
+            not is_numeric_dtype(dtype)
+            or is_bool_dtype(dtype)
+            or is_complex_dtype(dtype)
+            for dtype in prices.dtypes
+        ):
+            raise MarketDataUnavailableError(message)
+        values = prices.to_numpy(dtype=float, na_value=np.nan)
+        observed = values[~np.isnan(values)]
+        if not np.isfinite(observed).all() or (observed <= 0).any():
+            raise MarketDataUnavailableError(message)
 
     @staticmethod
     def _extract_adjusted_close(raw: pd.DataFrame, tickers: list[str]) -> pd.DataFrame:

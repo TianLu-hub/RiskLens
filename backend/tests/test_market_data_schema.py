@@ -73,6 +73,68 @@ def test_close_selection_and_provenance_are_preserved(
 
 
 @pytest.mark.parametrize(
+    "bad_price", [0, -5, np.inf, -np.inf, True, 1 + 2j, "bad", "100"]
+)
+def test_invalid_observed_prices_are_rejected_before_caching(
+    monkeypatch, yahoo_frame, bad_price
+):
+    # Preserve the actual provider dtype; do not coerce strings/bools to floats.
+    values = (
+        [bad_price] * 70
+        if isinstance(bad_price, (bool, complex, str))
+        else np.linspace(100, 120, 70)
+    )
+    raw = yahoo_frame({"Adj Close": values})
+    raw.iloc[20, 0] = bad_price
+    original = raw.copy(deep=True)
+    monkeypatch.setattr("app.data.market_data.yf.download", lambda *a, **k: raw)
+    provider = YahooFinanceProvider()
+    with pytest.raises(MarketDataUnavailableError, match="strictly positive"):
+        provider.get_adjusted_prices(
+            ["SPY"], datetime(2025, 1, 1), datetime(2025, 6, 1)
+        )
+    assert not provider._cache
+    pd.testing.assert_frame_equal(raw, original)
+
+
+@pytest.mark.parametrize("dtype", ["float64", "Float64"])
+def test_missing_prices_keep_existing_fill_and_provenance(
+    monkeypatch, yahoo_frame, dtype
+):
+    raw = yahoo_frame({"Adj Close": np.linspace(100, 120, 70)}).astype(dtype)
+    raw.iloc[20, 0] = np.nan
+    monkeypatch.setattr("app.data.market_data.yf.download", lambda *a, **k: raw)
+    result = YahooFinanceProvider().get_adjusted_prices(
+        ["SPY"], datetime(2025, 1, 1), datetime(2025, 6, 1)
+    )
+    assert result.prices.iloc[20, 0] == result.prices.iloc[19, 0]
+    assert result.provenance.assets[0].missing_prices == 1
+    assert result.provenance.assets[0].filled_prices == 1
+    assert len(result.prices) == 70
+
+
+def test_invalid_prices_do_not_poison_retry(monkeypatch, yahoo_frame):
+    raw = yahoo_frame({"Adj Close": np.linspace(100, 120, 70)})
+    invalid = raw.copy()
+    invalid.iloc[20, 0] = 0
+    responses = iter([invalid, raw])
+    monkeypatch.setattr(
+        "app.data.market_data.yf.download", lambda *a, **k: next(responses)
+    )
+    provider = YahooFinanceProvider()
+    args = (["SPY"], datetime(2025, 1, 1), datetime(2025, 6, 1))
+    with pytest.raises(MarketDataUnavailableError):
+        provider.get_adjusted_prices(*args)
+    recovered = provider.get_adjusted_prices(*args)
+    assert recovered.provenance.cache_hit is False
+    assert recovered.prices.iloc[20, 0] > 0
+    assert provider.get_adjusted_prices(*args).provenance.cache_hit is True
+
+
+@pytest.mark.parametrize(
+    "invalid_price", [False, True], ids=["missing-close", "zero-price"]
+)
+@pytest.mark.parametrize(
     "path",
     [
         "/portfolio/analyze",
@@ -82,10 +144,13 @@ def test_close_selection_and_provenance_are_preserved(
         "/market/history/SPY",
     ],
 )
-def test_missing_close_returns_service_unavailable(monkeypatch, yahoo_frame, path):
+def test_bad_price_data_returns_service_unavailable(
+    monkeypatch, yahoo_frame, path, invalid_price
+):
+    raw = yahoo_frame({"Adj Close": 0} if invalid_price else {"Volume": 1000})
     monkeypatch.setattr(
         "app.data.market_data.yf.download",
-        lambda *a, **k: yahoo_frame({"Volume": 1000}),
+        lambda *a, **k: raw,
     )
     provider = YahooFinanceProvider()
     monkeypatch.setitem(
@@ -99,6 +164,6 @@ def test_missing_close_returns_service_unavailable(monkeypatch, yahoo_frame, pat
             path, json={"positions": [{"ticker": "SPY", "weight": 1}]}
         )
     assert response.status_code == 503
-    assert "closing prices" in response.text
+    assert ("strictly positive" if invalid_price else "closing prices") in response.text
     assert "INVALID_TICKER" not in response.text
     assert not provider._cache

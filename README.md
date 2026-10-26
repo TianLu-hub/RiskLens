@@ -256,6 +256,8 @@ The bilingual data panel distinguishes historical daily prices, synthetic demo d
 
 The actual sample count is daily **returns**, not price rows or the requested number of years. Backtest metadata includes both training and test data; the forward-test panel separately reports test days. Missingness counts use provider-returned dates, not a full exchange-calendar audit. Up to three missing rows are forward-filled, remaining incomplete dates are excluded, and the retained fill count and each asset's last observed date are disclosed. Calculations and existing alignment rules are unchanged.
 
+Yahoo price validation distinguishes missing observations from invalid values. Zero, negative, infinite, nonnumeric, boolean, or complex closing prices are rejected before alignment and caching; affected APIs return `503` instead of computing from corrupt data. Missing observations still follow the disclosed gap-handling policy. This check does not detect every bad quote or verify prices against another provider.
+
 ## Tests
 
 ```bash
