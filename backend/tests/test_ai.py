@@ -13,6 +13,7 @@ from pydantic import ValidationError
 from app.api.ai import get_configured_risk_officer_ai
 from app.ai.deterministic_officer import DeterministicRiskOfficer
 from app.ai.officer import _classify_provider_error
+from app.ai.scenario_parser import ScenarioInterpretationError
 from app.main import app
 from app.models.ai import (
     EvidenceKey,
@@ -307,6 +308,64 @@ def test_deterministic_ticker_and_market_scenario_parser() -> None:
     assert len(parsed.ticker_shocks) == 1
     assert parsed.ticker_shocks[0].ticker == "NVDA"
     assert parsed.ticker_shocks[0].shock == pytest.approx(-0.30)
+
+
+@pytest.mark.parametrize(
+    "question",
+    [
+        "What if NVDA drops 150%?",
+        "NVDA +100.01%",
+        "如果NVDA下跌150%会怎样？",
+        "NVDA上涨150%",
+        "Tech drops 15% and NVDA drops 150%",
+        "NVDA -" + "9" * 400 + "%",
+        "Tech drops 150%",
+        "Market +150%",
+        "Rates rise 1001 bps",
+    ],
+)
+def test_out_of_range_scenarios_return_422_without_computation(monkeypatch, question):
+    monkeypatch.setenv("AI_PROVIDER", "deterministic")
+
+    def unexpected_call(*args, **kwargs):
+        pytest.fail(
+            "Invalid scenario must not reach stress computation or narrative generation"
+        )
+
+    monkeypatch.setattr("app.ai.officer.run_stress_test", unexpected_call)
+    monkeypatch.setattr(DeterministicRiskOfficer, "create_narrative", unexpected_call)
+    with pytest.raises(ScenarioInterpretationError, match="outside.*bounds"):
+        DeterministicRiskOfficer().parse_intent(question, ["NVDA"])
+
+    response = TestClient(app, raise_server_exceptions=False).post(
+        "/ai/risk-officer", json=_request_payload(question)
+    )
+    assert response.status_code == 422
+    assert response.json()["detail"] == {
+        "code": "INVALID_AI_SCENARIO",
+        "message": "A parsed shock is outside the supported scenario bounds.",
+    }
+
+
+@pytest.mark.parametrize("shock", [-100, 0, 100])
+def test_ticker_shock_bounds_are_inclusive(monkeypatch, shock):
+    monkeypatch.setenv("AI_PROVIDER", "deterministic")
+    response = TestClient(app).post(
+        "/ai/risk-officer",
+        json=_request_payload(f"Market -10% and NVDA {shock:+}%"),
+    )
+    assert response.status_code == 200
+    result = response.json()
+    assert result["parsed_scenario"]["ticker_shocks"] == [
+        {"ticker": "NVDA", "shock": shock / 100}
+    ]
+    asset = next(
+        item
+        for item in result["stress_test"]["asset_contributions"]
+        if item["ticker"] == "NVDA"
+    )
+    assert asset["estimated_asset_return"] == pytest.approx(shock / 100)
+    assert asset["portfolio_contribution"] == pytest.approx(0.15 * shock / 100)
 
 
 @pytest.mark.parametrize(

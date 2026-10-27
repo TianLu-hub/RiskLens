@@ -137,7 +137,7 @@ class DeterministicRiskOfficer:
             scale=1.0,
         )
 
-        ticker_shocks: list[ParsedTickerShock] = []
+        ticker_shocks: list[tuple[str, float]] = []
         for ticker in tickers:
             shock = _extract_directional_value(
                 normalized,
@@ -148,13 +148,13 @@ class DeterministicRiskOfficer:
                 scale=100.0,
             )
             if shock is not None:
-                ticker_shocks.append(ParsedTickerShock(ticker=ticker, shock=shock))
+                ticker_shocks.append((ticker, shock))
 
         values = [
             percentage_shocks["market_shock"],
             percentage_shocks["tech_shock"],
             rates_shock_bps,
-            *(item.shock for item in ticker_shocks),
+            *(shock for _, shock in ticker_shocks),
         ]
         has_scenario = any(value is not None for value in values)
 
@@ -181,7 +181,12 @@ class DeterministicRiskOfficer:
                 market_shock=percentage_shocks["market_shock"],
                 tech_shock=percentage_shocks["tech_shock"],
                 rates_shock_bps=rates_shock_bps,
-                ticker_shocks=ticker_shocks,
+                # Validate nested ticker shocks inside the same error boundary
+                # as market, technology, and rate shocks.
+                ticker_shocks=[
+                    ParsedTickerShock(ticker=ticker, shock=shock)
+                    for ticker, shock in ticker_shocks
+                ],
             )
         except ValidationError as error:
             raise ScenarioInterpretationError(
