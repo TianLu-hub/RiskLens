@@ -369,6 +369,61 @@ def test_ticker_shock_bounds_are_inclusive(monkeypatch, shock):
 
 
 @pytest.mark.parametrize(
+    "question",
+    [
+        "Tech drops 15% and tech rises 20%",
+        "Tech rises 20% and tech drops 15%",
+        "NVDA -10%, NVDA -30%",
+        "NVDA +0%, NVDA -30%",
+        "Overall market drops 10%, market drops 20%",
+        "Tech -15%, technology drops 20%",
+        "Tech drops 15%, 20% fall tech",
+        "Rates rise 100 bps and interest rates fall 50 bps",
+        "科技下跌15%，科技上涨20%",
+        "利率上升100个基点，利率下降50个基点",
+        "NVDA下跌10%，NVDA下跌30%",
+    ],
+)
+def test_conflicting_scenario_shocks_are_rejected(monkeypatch, question):
+    monkeypatch.setenv("AI_PROVIDER", "deterministic")
+
+    def unexpected_call(*args, **kwargs):
+        pytest.fail("Conflicting shocks must not reach computation or explanation")
+
+    monkeypatch.setattr("app.ai.officer.run_stress_test", unexpected_call)
+    monkeypatch.setattr(DeterministicRiskOfficer, "create_narrative", unexpected_call)
+    with pytest.raises(ScenarioInterpretationError, match="Conflicting shocks"):
+        DeterministicRiskOfficer().parse_intent(question, ["NVDA"])
+    response = TestClient(app).post("/ai/risk-officer", json=_request_payload(question))
+    assert response.status_code == 422
+    assert response.json()["detail"]["code"] == "INVALID_AI_SCENARIO"
+    assert "separate scenarios" in response.json()["detail"]["message"]
+
+
+@pytest.mark.parametrize(
+    "question",
+    [
+        "Tech drops 15%, technology -15%, rates +100 bps, NVDA -30%",
+        "科技下跌15%，科技板块下跌15%，利率上升100个基点，NVDA下跌30%",
+    ],
+)
+def test_repeated_equivalent_shocks_and_distinct_factors_are_preserved(
+    monkeypatch, question
+):
+    monkeypatch.setenv("AI_PROVIDER", "deterministic")
+    response = TestClient(app).post("/ai/risk-officer", json=_request_payload(question))
+    assert response.status_code == 200
+    scenario = response.json()["parsed_scenario"]
+    assert scenario["tech_shock"] == pytest.approx(-0.15)
+    assert scenario["rates_shock_bps"] == pytest.approx(100)
+    assert scenario["ticker_shocks"] == [{"ticker": "NVDA", "shock": -0.30}]
+    assets = response.json()["stress_test"]["asset_contributions"]
+    assert sum(item["portfolio_contribution"] for item in assets) == pytest.approx(
+        response.json()["stress_test"]["estimated_portfolio_return"]
+    )
+
+
+@pytest.mark.parametrize(
     "provider_code", ["insufficient_quota", "credit_balance_exhausted"]
 )
 def test_provider_error_reports_missing_api_quota_safely(provider_code: str) -> None:

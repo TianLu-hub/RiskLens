@@ -244,15 +244,22 @@ def _extract_directional_value(
         (rf"{_NUMBER}{unit_pattern}{separator}{negative}{separator}{subject}", -1.0),
         (rf"{_NUMBER}{unit_pattern}{separator}{positive}{separator}{subject}", 1.0),
     )
+    result: float | None = None
     for pattern, fixed_sign in patterns:
-        match = re.search(pattern, text, flags=re.IGNORECASE)
-        if match is None:
-            continue
-        sign = fixed_sign
-        if sign is None:
-            sign = -1.0 if match.group("sign") == "-" else 1.0
-        return sign * float(match.group("value")) / scale
-    return None
+        for match in re.finditer(pattern, text, flags=re.IGNORECASE):
+            sign = fixed_sign
+            if sign is None:
+                sign = -1.0 if match.group("sign") == "-" else 1.0
+            value = sign * float(match.group("value")) / scale
+            # Repeated aliases may express the same shock. Different values
+            # require clarification, never a choice based on pattern order.
+            if result is not None and value != result:
+                raise ScenarioInterpretationError(
+                    "Conflicting shocks were provided for the same asset or factor. "
+                    "Use one shock per asset or factor, or submit separate scenarios."
+                )
+            result = value
+    return result
 
 
 def _looks_like_unparsed_scenario(text: str) -> bool:
