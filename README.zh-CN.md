@@ -231,6 +231,8 @@ pnpm dev
 
 安装后端依赖后，在 `backend/` 目录运行：
 
+若要核对某个发布版本，请将后端 `RISKLENS_REVISION` 设置为**实际部署源码的完整 40 位提交 SHA**，再部署或重启该后端。`/health` 会通过 `revision` 返回版本；未设置或格式不合法时返回 `null`，不会直接暴露任意环境变量文本。在下方命令中加入 `--expected-revision 完整提交SHA`，或填写手动工作流的 **expected_revision**。版本缺失或不匹配时，会在压力测试与行情请求前失败；留空则保留原健康检查行为。这只是核对运维填写的版本信息，并非部署产物的真实性证明；不能只改变量、却不部署代码来让检查通过。
+
 ```bash
 # 检查本地 API 与浏览器来源，不调用 Yahoo 或 LLM
 python -m scripts.check_deployment

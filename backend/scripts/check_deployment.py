@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import math
+import re
 from collections.abc import Sequence
 
 import httpx
@@ -17,6 +18,14 @@ from scripts.var_probe import validate_var_response
 
 class CheckFailed(Exception):
     """An actionable deployment check failed."""
+
+
+def commit_revision(value: str) -> str:
+    """Accept a full SHA only; branch names and abbreviated hashes are ambiguous."""
+
+    if not re.fullmatch(r"[0-9a-fA-F]{40}", value):
+        raise argparse.ArgumentTypeError("Expected a full 40-character Git commit SHA")
+    return value.lower()
 
 
 def origin_url(value: str) -> str:
@@ -109,9 +118,12 @@ def check_deployment(
     *,
     include_market_data: bool = False,
     include_var_backtest: bool = False,
+    expected_revision: str | None = None,
 ) -> list[str]:
     """Probe health, CORS, stress, and independently selected historical checks."""
 
+    if expected_revision is not None:
+        expected_revision = commit_revision(expected_revision)
     passed: list[str] = []
     stage = "health"
     try:
@@ -122,6 +134,20 @@ def check_deployment(
             raise CheckFailed("Unexpected service: verify the backend API URL")
         require_cors(response, origin)
         passed.append("PASS health: RiskLens API is reachable")
+
+        if expected_revision is not None:
+            stage = "release revision"
+            if health.revision is None:
+                raise CheckFailed(
+                    "Release revision is unavailable: deploy revision-aware health "
+                    "and set RISKLENS_REVISION to the deployed commit SHA"
+                )
+            if health.revision != expected_revision:
+                raise CheckFailed(
+                    "Release revision mismatch: verify the deployed source and "
+                    "RISKLENS_REVISION; health alone does not confirm a release"
+                )
+            passed.append("PASS revision: reported commit matches the expected SHA")
 
         stage = "CORS preflight"
         check_preflight(client, origin, "/portfolio/stress-test")
@@ -210,6 +236,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--origin", type=origin_url, default="http://localhost:3000")
     parser.add_argument("--timeout", type=positive_timeout, default=30.0)
     parser.add_argument(
+        "--expected-revision",
+        type=commit_revision,
+        help="Require health to report this full commit SHA (release metadata only)",
+    )
+    parser.add_argument(
         "--include-market-data",
         action="store_true",
         help="Also analyze the default portfolio (may fetch Yahoo history or use cache)",
@@ -229,6 +260,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 args.origin,
                 include_market_data=args.include_market_data,
                 include_var_backtest=args.include_var_backtest,
+                expected_revision=args.expected_revision,
             )
     except CheckFailed as exc:
         print(f"FAIL {exc}")

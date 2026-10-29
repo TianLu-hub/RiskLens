@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import re
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -49,4 +50,14 @@ app.include_router(var_backtest_router)
 def health() -> HealthResponse:
     """Liveness endpoint for local development and deployment platforms."""
 
-    return HealthResponse(status="ok", service="risklens-api", version=APP_VERSION)
+    # Only expose an explicitly configured full commit SHA, never arbitrary
+    # environment contents. This is release metadata, not artifact attestation.
+    configured_revision = os.getenv("RISKLENS_REVISION", "").strip()
+    revision = (
+        configured_revision.lower()
+        if re.fullmatch(r"[0-9a-fA-F]{40}", configured_revision)
+        else None
+    )
+    return HealthResponse(
+        status="ok", service="risklens-api", version=APP_VERSION, revision=revision
+    )

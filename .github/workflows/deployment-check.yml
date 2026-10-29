@@ -3,6 +3,10 @@ name: Production API check
 on:
   workflow_dispatch:
     inputs:
+      expected_revision:
+        description: "Optional full deployed commit SHA (blank skips revision check)"
+        type: string
+        default: ""
       include_market_data:
         description: "Check historical analysis (may fetch Yahoo data)"
         type: boolean
@@ -47,6 +51,7 @@ jobs:
       - name: Check published API
         id: probe
         env:
+          EXPECTED_REVISION: ${{ inputs.expected_revision }}
           INCLUDE_MARKET_DATA: ${{ inputs.include_market_data }}
           INCLUDE_VAR_BACKTEST: ${{ inputs.include_var_backtest }}
         run: |
@@ -56,6 +61,9 @@ jobs:
             --origin https://risklens-ai-portfolio-risk-terminal.tianlu923.chatgpt.site
             --timeout 60
           )
+          if [[ -n "$EXPECTED_REVISION" ]]; then
+            args+=(--expected-revision "$EXPECTED_REVISION")
+          fi
           if [[ "$INCLUDE_MARKET_DATA" == "true" ]]; then
             args+=(--include-market-data)
           fi
@@ -84,5 +92,5 @@ jobs:
               echo 'Probe did not run; inspect setup/install logs.'
             fi
             echo '```'
-            echo 'No deployment or AI calls. Passing checks do not verify the deployed commit, numerical accuracy, data freshness, or browser UI.'
+            echo 'No deployment or AI calls. Optional revision matching checks reported metadata, not artifact authenticity. Passing checks do not verify numerical accuracy, data freshness, or browser UI.'
           } >> "$GITHUB_STEP_SUMMARY"

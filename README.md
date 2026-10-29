@@ -231,6 +231,8 @@ On GitHub, open **Actions → Production API check → Run workflow**, select `m
 
 With backend dependencies installed, run this from `backend/`:
 
+To check a specific release, set backend `RISKLENS_REVISION` to the **full 40-character SHA of the source actually deployed**, then redeploy/restart that backend. `/health` reports it as `revision`; unset or invalid values return `null` without exposing arbitrary environment text. Add `--expected-revision FULL_COMMIT_SHA` to the command below, or fill **expected_revision** in the manual workflow. A missing or mismatched revision fails before stress or market-data requests; leaving it blank keeps the original liveness checks. This is an exact comparison of operator-supplied metadata, not proof of artifact authenticity: never change only the variable to make an old deployment appear current.
+
 ```bash
 # Local API and browser origin; no Yahoo or LLM calls
 python -m scripts.check_deployment
