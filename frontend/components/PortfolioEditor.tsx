@@ -1,5 +1,6 @@
 'use client';
 import { useLanguage } from '@/components/LanguageProvider';
+import { useId } from 'react';
 
 import { LoaderCircle, Plus, Scale, Trash2 } from 'lucide-react';
 
@@ -10,6 +11,7 @@ import {
   NativeSelectOption,
 } from '@/components/ui/native-select';
 import { DEMO_PORTFOLIOS } from '@/lib/demo-data';
+import { validatePortfolioInput } from '@/lib/portfolio-validation';
 import type { DemoPortfolioName, PositionInput } from '@/lib/types';
 
 type Props = {
@@ -30,13 +32,9 @@ export function PortfolioEditor({
   isLoading,
 }: Props) {
   const { t } = useLanguage();
-  const total = positions.reduce((sum, position) => sum + position.weight, 0);
-  const isValid =
-    positions.length > 0 &&
-    positions.every(
-      (position) => position.ticker.trim() && position.weight >= 0,
-    ) &&
-    Math.abs(total - 1) <= 0.0001;
+  const inputId = useId();
+  const validation = validatePortfolioInput(positions);
+  const { total, isValid } = validation;
 
   function updatePosition(index: number, patch: Partial<PositionInput>) {
     onChange(
@@ -52,7 +50,7 @@ export function PortfolioEditor({
   }
 
   function normalize() {
-    if (total <= 0) return;
+    if (!validation.canNormalize || total === null) return;
     onChange(
       positions.map((position) => ({
         ...position,
@@ -107,6 +105,12 @@ export function PortfolioEditor({
               }
               className="h-8 rounded border-transparent bg-transparent px-1 font-mono text-sm font-semibold hover:border-input focus:border-ring"
               aria-label={t('Ticker {index}', { index: index + 1 })}
+              aria-invalid={Boolean(validation.rows[index].ticker)}
+              aria-describedby={
+                validation.rows[index].ticker
+                  ? `${inputId}-${index}-ticker`
+                  : undefined
+              }
             />
             <div className="relative">
               <Input
@@ -114,7 +118,11 @@ export function PortfolioEditor({
                 min="0"
                 max="100"
                 step="0.1"
-                value={Number((position.weight * 100).toFixed(4))}
+                value={
+                  Number.isFinite(position.weight)
+                    ? Number((position.weight * 100).toFixed(4))
+                    : ''
+                }
                 disabled={isLoading}
                 onChange={(event) =>
                   updatePosition(index, {
@@ -125,6 +133,12 @@ export function PortfolioEditor({
                 aria-label={t('{ticker} weight percent', {
                   ticker: position.ticker || String(index + 1),
                 })}
+                aria-invalid={Boolean(validation.rows[index].weight)}
+                aria-describedby={
+                  validation.rows[index].weight
+                    ? `${inputId}-${index}-weight`
+                    : undefined
+                }
               />
               <span className="pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2 text-[12px] text-muted-foreground">
                 %
@@ -145,6 +159,22 @@ export function PortfolioEditor({
             >
               <Trash2 />
             </Button>
+            {validation.rows[index].ticker && (
+              <p
+                id={`${inputId}-${index}-ticker`}
+                className="col-span-3 text-xs leading-relaxed text-amber-300"
+              >
+                {t(validation.rows[index].ticker)}
+              </p>
+            )}
+            {validation.rows[index].weight && (
+              <p
+                id={`${inputId}-${index}-weight`}
+                className="col-span-3 text-xs leading-relaxed text-amber-300"
+              >
+                {t(validation.rows[index].weight)}
+              </p>
+            )}
           </div>
         ))}
       </div>
@@ -155,8 +185,14 @@ export function PortfolioEditor({
             size="sm"
             variant="outline"
             className="rounded-sm"
-            disabled={isLoading}
-            onClick={() => onChange([...positions, { ticker: '', weight: 0 }])}
+            disabled={isLoading || !validation.canAdd}
+            aria-describedby={
+              !validation.canAdd ? `${inputId}-limit` : undefined
+            }
+            onClick={() => {
+              if (validation.canAdd)
+                onChange([...positions, { ticker: '', weight: 0 }]);
+            }}
           >
             <Plus /> {t('Position')}
           </Button>
@@ -165,11 +201,16 @@ export function PortfolioEditor({
             variant="outline"
             className="rounded-sm"
             onClick={normalize}
-            disabled={isLoading || total <= 0}
+            disabled={isLoading || !validation.canNormalize}
           >
             <Scale /> {t('Normalize')}
           </Button>
         </div>
+        {!validation.canAdd && (
+          <p id={`${inputId}-limit`} className="mt-2 text-xs text-amber-300">
+            {t('A portfolio supports up to 50 positions.')}
+          </p>
+        )}
         <div className="mt-3 flex items-center justify-between text-[12px] uppercase tracking-wider text-muted-foreground">
           <span>{t('Total weight')}</span>
           <span
@@ -179,7 +220,8 @@ export function PortfolioEditor({
                 : 'font-mono text-amber-300'
             }
           >
-            {(total * 100).toFixed(2)}% · {isValid ? t('Valid') : t('Review')}
+            {total === null ? '—' : `${(total * 100).toFixed(2)}%`} ·{' '}
+            {isValid ? t('Valid') : t('Review')}
           </span>
         </div>
         <div className="mt-1.5 h-1 overflow-hidden bg-muted">
@@ -187,8 +229,17 @@ export function PortfolioEditor({
             className={
               isValid ? 'h-full bg-emerald-400' : 'h-full bg-amber-400'
             }
-            style={{ width: `${Math.min(total * 100, 100)}%` }}
+            style={{
+              width: `${Math.max(0, Math.min((total ?? 0) * 100, 100))}%`,
+            }}
           />
+        </div>
+        <div aria-live="polite" aria-atomic="true">
+          {validation.message && (
+            <p className="mt-2 text-xs leading-relaxed text-amber-300">
+              {t(validation.message)}
+            </p>
+          )}
         </div>
         <Button
           className="mt-3 h-10 w-full rounded font-semibold"

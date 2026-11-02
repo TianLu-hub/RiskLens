@@ -74,6 +74,14 @@ export const zhMessages: Record<string, string> = {
   'Browser storage is unavailable. Changes will not persist after reload.':
     '浏览器存储不可用，刷新后将无法保留更改。',
   'Every position needs a ticker.': '每项持仓都需要股票或 ETF 代码。',
+  'Add at least one position.': '请至少添加一项持仓。',
+  'A portfolio supports up to 50 positions.': '每个组合最多支持 50 项持仓。',
+  'Use 1–15 letters, numbers, dots or hyphens; start with a letter or number.':
+    '请输入 1–15 位字母、数字、点或连字符，并以字母或数字开头。',
+  'Enter a finite weight between 0% and 100%.':
+    '请输入 0% 到 100% 之间的有限权重。',
+  'Review the highlighted positions before analysis.':
+    '请先修正已标出的持仓，再进行分析。',
   'Each ticker may appear only once.': '同一代码不能重复。',
   'Weights must sum to 100% before analysis.': '分析前，权重之和必须为 100%。',
   'The analysis could not be completed.': '未能完成分析。',
