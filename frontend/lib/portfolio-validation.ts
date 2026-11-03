@@ -48,6 +48,15 @@ export function validatePortfolioInput(positions: PositionInput[]) {
     total,
     message,
     isValid: message === null,
+    // Only validated holdings may become ticker-keyed controls or request inputs.
+    // Invalid drafts stay in the editor; never silently merge or drop holdings.
+    validPositions:
+      message === null
+        ? positions.map((position, index) => ({
+            ...position,
+            ticker: tickers[index],
+          }))
+        : [],
     canAdd: positions.length < MAX_PORTFOLIO_POSITIONS,
     // Oversized but finite nonnegative weights can be repaired explicitly.
     canNormalize:

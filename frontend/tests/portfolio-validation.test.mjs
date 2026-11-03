@@ -133,3 +133,58 @@ test('every dynamic validation message has English and Chinese copy', () => {
     assert.notEqual(translate('zh', message), message);
   }
 });
+
+test('invalid drafts expose no ticker-keyed controls or partial request portfolio', () => {
+  const invalid = [
+    [],
+    [position('AAPL', 0.5), position(' aapl ', 0.5)],
+    [position('', 0.5), position('', 0.5)],
+    [position('AAPL', 0.5), position('A/B', 0.5)],
+    [position('AAPL', 0.5)],
+    [position('AAPL', NaN)],
+    [position('AAPL', -0.1), position('MSFT', 1.1)],
+    Array.from({ length: 51 }, (_, i) => position(`T${i}`, 1 / 51)),
+  ];
+  for (const input of invalid) {
+    const before = structuredClone(input);
+    const result = validatePortfolioInput(input);
+    assert.equal(result.isValid, false);
+    assert.deepEqual(result.validPositions, []);
+    assert.deepEqual(input, before);
+  }
+});
+
+test('valid request holdings normalize identifiers, not weights or capital', () => {
+  const input = [
+    { ticker: ' aapl ', weight: 0.99995, initial_value: 12345 },
+    position('msft', 0),
+  ];
+  const before = structuredClone(input);
+  const result = validatePortfolioInput(input);
+  assert.equal(result.isValid, true);
+  assert.deepEqual(result.validPositions, [
+    { ticker: 'AAPL', weight: 0.99995, initial_value: 12345 },
+    position('MSFT', 0),
+  ]);
+  assert.deepEqual(input, before);
+  assert.notEqual(result.validPositions[0], input[0]);
+});
+
+test('fixing duplicate and blank draft rows restores exactly the current unique holdings', () => {
+  const input = [position('AAPL', 0.5), position('AAPL', 0.5)];
+  assert.deepEqual(validatePortfolioInput(input).validPositions, []);
+  input[1].ticker = '';
+  assert.deepEqual(validatePortfolioInput(input).validPositions, []);
+  input[1].ticker = 'MSFT';
+  assert.deepEqual(validatePortfolioInput(input).validPositions, input);
+});
+
+test('stress draft validation guidance is bilingual', () => {
+  const message =
+    'Fix the portfolio inputs before configuring ticker overrides or running a stress test.';
+  assert.equal(translate('en', message), message);
+  assert.equal(
+    translate('zh', message),
+    '请先修正组合输入，再设置个股冲击或运行压力测试。',
+  );
+});

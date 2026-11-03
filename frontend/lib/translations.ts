@@ -74,6 +74,8 @@ export const zhMessages: Record<string, string> = {
   'Browser storage is unavailable. Changes will not persist after reload.':
     '浏览器存储不可用，刷新后将无法保留更改。',
   'Every position needs a ticker.': '每项持仓都需要股票或 ETF 代码。',
+  'Fix the portfolio inputs before configuring ticker overrides or running a stress test.':
+    '请先修正组合输入，再设置个股冲击或运行压力测试。',
   'Add at least one position.': '请至少添加一项持仓。',
   'A portfolio supports up to 50 positions.': '每个组合最多支持 50 项持仓。',
   'Use 1–15 letters, numbers, dots or hyphens; start with a letter or number.':

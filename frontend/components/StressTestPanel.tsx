@@ -18,6 +18,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { runStressTest } from '@/lib/api';
+import { validatePortfolioInput } from '@/lib/portfolio-validation';
 import {
   overrideDrafts,
   tickerShockInputs,
@@ -72,14 +73,11 @@ export function StressTestPanel({ positions }: { positions: PositionInput[] }) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const cleanPositions = useMemo(
-    () =>
-      positions.map((position) => ({
-        ...position,
-        ticker: position.ticker.trim().toUpperCase(),
-      })),
+  const portfolioValidation = useMemo(
+    () => validatePortfolioInput(positions),
     [positions],
   );
+  const cleanPositions = portfolioValidation.validPositions;
   const maxFactorContribution = Math.max(
     ...result.factor_contributions.map((factor) =>
       Math.abs(factor.portfolio_contribution),
@@ -109,13 +107,12 @@ export function StressTestPanel({ positions }: { positions: PositionInput[] }) {
   }
 
   async function submitScenario() {
-    const tickers = cleanPositions.map((position) => position.ticker);
-    if (tickers.some((ticker) => !ticker)) {
-      setError(
-        'Every portfolio position needs a ticker before stress testing.',
-      );
+    if (isLoading) return;
+    if (!portfolioValidation.isValid) {
+      setError(portfolioValidation.message);
       return;
     }
+    const tickers = cleanPositions.map((position) => position.ticker);
 
     let tickerShocks: Record<string, number>;
     try {
@@ -319,6 +316,13 @@ export function StressTestPanel({ positions }: { positions: PositionInput[] }) {
                   'Check a ticker to replace its total shock. Unchecked uses factor shocks; enabled 0% keeps that asset unchanged.',
                 )}
               </p>
+              {!portfolioValidation.isValid && (
+                <output className="mt-2 block border-l-2 border-amber-300/50 pl-2 text-xs leading-relaxed text-amber-200">
+                  {t(
+                    'Fix the portfolio inputs before configuring ticker overrides or running a stress test.',
+                  )}
+                </output>
+              )}
               <div className="mt-2 grid grid-cols-2 gap-1.5 sm:grid-cols-3 xl:grid-cols-2">
                 {cleanPositions.map((position) => {
                   const enabled = Object.hasOwn(
@@ -396,7 +400,7 @@ export function StressTestPanel({ positions }: { positions: PositionInput[] }) {
             <Button
               type="button"
               onClick={submitScenario}
-              disabled={isLoading}
+              disabled={isLoading || !portfolioValidation.isValid}
               className="mt-4 h-9 w-full rounded-sm text-[12px] font-semibold uppercase tracking-wider"
             >
               <Play className="size-3" />
