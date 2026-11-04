@@ -221,6 +221,30 @@ def _alternation(values: tuple[str, ...]) -> str:
     return "(?:" + "|".join(re.escape(value) for value in values) + ")"
 
 
+def _subject_alternation(subjects: tuple[str, ...], *, signed: bool = False) -> str:
+    """Match whole Latin identifiers while allowing adjacent Chinese prose.
+
+    Dots and hyphens inside symbols are not word boundaries. A trailing period
+    can still end a sentence. Only the signed-shock grammar permits an attached
+    minus followed by digits (NVDA-30%); the reversed grammar must not match ABC
+    inside ABC-2. Direction words and Chinese aliases keep their existing grammar.
+    """
+
+    patterns = []
+    for subject in subjects:
+        pattern = re.escape(subject)
+        if subject[0].isascii() and subject[0].isalnum():
+            pattern = r"(?<![a-z0-9_.-])" + pattern
+        if subject[-1].isascii() and subject[-1].isalnum():
+            pattern += (
+                r"(?![a-z0-9_]|\.[a-z0-9_]|-[a-z_])"
+                if signed
+                else r"(?![a-z0-9_]|[.-][a-z0-9_])"
+            )
+        patterns.append(pattern)
+    return "(?:" + "|".join(patterns) + ")"
+
+
 def _extract_directional_value(
     text: str,
     *,
@@ -232,7 +256,8 @@ def _extract_directional_value(
 ) -> float | None:
     """Extract one explicit bounded shock using a lexicon-backed grammar."""
 
-    subject = _alternation(subjects)
+    subject = _subject_alternation(subjects)
+    signed_subject = _subject_alternation(subjects, signed=True)
     negative = _alternation(negative_words)
     positive = _alternation(positive_words)
     separator = r"(?:\s|[:;,，]|would|by|of|shock|moves?|move|is|to){0,28}"
@@ -240,7 +265,7 @@ def _extract_directional_value(
     patterns: tuple[tuple[str, float | None], ...] = (
         (rf"{subject}{separator}{negative}{separator}{_NUMBER}{unit_pattern}", -1.0),
         (rf"{subject}{separator}{positive}{separator}{_NUMBER}{unit_pattern}", 1.0),
-        (rf"{subject}{separator}(?P<sign>[+-])\s*{_NUMBER}{unit_pattern}", None),
+        (rf"{signed_subject}{separator}(?P<sign>[+-])\s*{_NUMBER}{unit_pattern}", None),
         (rf"{_NUMBER}{unit_pattern}{separator}{negative}{separator}{subject}", -1.0),
         (rf"{_NUMBER}{unit_pattern}{separator}{positive}{separator}{subject}", 1.0),
     )

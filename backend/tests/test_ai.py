@@ -311,6 +311,87 @@ def test_deterministic_ticker_and_market_scenario_parser() -> None:
 
 
 @pytest.mark.parametrize(
+    "question,tickers,expected",
+    [
+        ("NVDA drops 30%", ["A", "NVDA"], {"NVDA": -0.30}),
+        ("30% drop SPY", ["S", "SPY"], {"SPY": -0.30}),
+        ("BRK-B drops 10%", ["B", "BRK", "BRK-B"], {"BRK-B": -0.10}),
+        ("10% drop BRK-B", ["B", "BRK", "BRK-B"], {"BRK-B": -0.10}),
+        ("10% drop BRK.B", ["B", "BRK", "BRK.B"], {"BRK.B": -0.10}),
+        ("10% drop ABC-2", ["ABC", "ABC-2"], {"ABC-2": -0.10}),
+        ("NVDA-30%", ["A", "NVDA"], {"NVDA": -0.30}),
+        ("如果NVDA下跌30%会怎样？", ["A", "NVDA"], {"NVDA": -0.30}),
+        ("A drops 10% and NVDA drops 30%", ["A", "NVDA"], {"A": -0.10, "NVDA": -0.30}),
+        ("10% drop A. 30% drop NVDA.", ["A", "NVDA"], {"A": -0.10, "NVDA": -0.30}),
+        ("$NVDA drops 30%", ["A", "NVDA"], {"NVDA": -0.30}),
+    ],
+)
+def test_scenario_subjects_match_whole_identifiers(question, tickers, expected):
+    parsed = DeterministicRiskOfficer().parse_intent(question, tickers)
+    assert parsed.intent is OfficerIntent.STRESS_SCENARIO
+    assert {item.ticker: item.shock for item in parsed.ticker_shocks} == expected
+
+
+@pytest.mark.parametrize(
+    "question",
+    [
+        "What if supermarket drops 10%?",
+        "What if biotech drops 10%?",
+        "What if corporate rises 100 bps?",
+        "What if NVDA.US drops 10%?",
+        "What if 10% drop NVDA.US?",
+        "What if XNVDA drops 10%?",
+    ],
+)
+def test_subject_substrings_do_not_trigger_stress_computation(monkeypatch, question):
+    monkeypatch.setenv("AI_PROVIDER", "deterministic")
+
+    def unexpected_call(*args, **kwargs):
+        pytest.fail("Unmatched subjects must not reach stress computation or narrative")
+
+    monkeypatch.setattr("app.ai.officer.run_stress_test", unexpected_call)
+    monkeypatch.setattr(DeterministicRiskOfficer, "create_narrative", unexpected_call)
+    response = TestClient(app).post("/ai/risk-officer", json=_request_payload(question))
+    assert response.status_code == 422
+    assert response.json()["detail"]["code"] == "INVALID_AI_SCENARIO"
+
+
+def test_ticker_substring_cannot_add_an_unrequested_loss(monkeypatch):
+    monkeypatch.setenv("AI_PROVIDER", "deterministic")
+    payload = _request_payload("What if NVDA drops 30%?")
+    payload["positions"][0]["ticker"] = "A"
+    payload["analysis"]["risk_contributions"][0]["ticker"] = "A"
+    response = TestClient(app).post("/ai/risk-officer", json=payload)
+    assert response.status_code == 200
+    result = response.json()
+    assert result["parsed_scenario"]["ticker_shocks"] == [
+        {"ticker": "NVDA", "shock": -0.30}
+    ]
+    assets = {
+        item["ticker"]: item for item in result["stress_test"]["asset_contributions"]
+    }
+    assert assets["A"]["estimated_asset_return"] == 0
+    assert assets["NVDA"]["estimated_asset_return"] == pytest.approx(-0.30)
+    assert result["stress_test"]["estimated_portfolio_return"] == pytest.approx(-0.045)
+
+
+@pytest.mark.parametrize(
+    "question",
+    [
+        "Market-10%, tech+15%, rates+100bps",
+        "10% drop market. 15% rise technology. 100 bps rise rates.",
+        "如果大盘下跌10%，科技上涨15%，利率上升100个基点",
+    ],
+)
+def test_subject_boundaries_preserve_supported_factor_scenarios(question):
+    parsed = DeterministicRiskOfficer().parse_intent(question, ["SPY"])
+    assert parsed.market_shock == pytest.approx(-0.10)
+    assert parsed.tech_shock == pytest.approx(0.15)
+    assert parsed.rates_shock_bps == pytest.approx(100)
+    assert parsed.ticker_shocks == []
+
+
+@pytest.mark.parametrize(
     "question",
     [
         "What if NVDA drops 150%?",
