@@ -119,9 +119,10 @@ class YahooFinanceProvider(MarketDataProvider):
         if invalid:
             raise InvalidTickerError(invalid)
 
-        prices = prices[normalized].sort_index()
+        prices = prices[normalized]
         self._validate_observed_prices(prices)
-        prices.index = pd.to_datetime(prices.index).tz_localize(None)
+        prices.index = self._validated_trading_dates(prices.index)
+        prices = prices.sort_index()
         original_counts = prices.notna().sum()
         original_prices = prices.copy()
 
@@ -235,6 +236,26 @@ class YahooFinanceProvider(MarketDataProvider):
                 else None
             ),
         )
+
+    @staticmethod
+    def _validated_trading_dates(index: pd.Index) -> pd.DatetimeIndex:
+        """Require one observation per local trading date for daily history.
+
+        Do not infer dates from integers/strings, drop duplicates, or shift
+        exchange dates via UTC conversion. Reject malformed samples before
+        sorting, filling, counting observations, or caching.
+        """
+
+        message = (
+            "Market data contains invalid trading dates: expected valid, unique "
+            "daily timestamps. Please try again."
+        )
+        if not isinstance(index, pd.DatetimeIndex) or index.hasnans:
+            raise MarketDataUnavailableError(message)
+        local_dates = index.tz_localize(None)
+        if not local_dates.normalize().is_unique:
+            raise MarketDataUnavailableError(message)
+        return local_dates
 
     @staticmethod
     def _validate_observed_prices(prices: pd.DataFrame) -> None:
