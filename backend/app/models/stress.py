@@ -20,6 +20,21 @@ class StressTestRequest(BaseModel):
     rates_shock_bps: float | None = Field(default=None, ge=-1_000.0, le=1_000.0)
     ticker_shocks: dict[str, float] = Field(default_factory=dict)
 
+    @field_validator(
+        "market_shock",
+        "tech_shock",
+        "rates_shock_bps",
+        "portfolio_value",
+        mode="before",
+    )
+    @classmethod
+    def reject_boolean_numbers(cls, value: object) -> object:
+        """Prevent JSON booleans becoming financial inputs through float coercion."""
+
+        if isinstance(value, bool):
+            raise ValueError("Scenario amounts must be numeric, not boolean")
+        return value
+
     @field_validator("scenario_name")
     @classmethod
     def clean_scenario_name(cls, value: str) -> str:

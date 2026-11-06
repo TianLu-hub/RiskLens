@@ -9,6 +9,83 @@ from app.main import app
 
 
 @pytest.mark.parametrize(
+    "field", ["market_shock", "tech_shock", "rates_shock_bps", "portfolio_value"]
+)
+@pytest.mark.parametrize("value", [True, False])
+def test_stress_api_rejects_boolean_scenario_numbers(field: str, value: bool) -> None:
+    payload = {
+        "positions": [{"ticker": "SPY", "weight": 1.0}],
+        "market_shock": -0.10,
+        "ticker_shocks": {"SPY": -0.20},
+        field: value,
+    }
+    response = TestClient(app, raise_server_exceptions=False).post(
+        "/portfolio/stress-test", json=payload
+    )
+
+    assert response.status_code == 422
+    error = response.json()["detail"][0]
+    assert error["loc"] == ["body", field]
+    assert "not boolean" in error["msg"]
+
+
+@pytest.mark.parametrize("as_strings", [False, True])
+def test_stress_api_preserves_numeric_scenario_inputs(as_strings: bool) -> None:
+    numbers = {
+        "market_shock": -0.10,
+        "tech_shock": -0.15,
+        "rates_shock_bps": 100,
+        "portfolio_value": 100_000,
+    }
+    response = TestClient(app).post(
+        "/portfolio/stress-test",
+        json={
+            "positions": [
+                {"ticker": "NVDA", "weight": 0.5},
+                {"ticker": "TLT", "weight": 0.5},
+            ],
+            **{
+                key: str(value) if as_strings else value
+                for key, value in numbers.items()
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    result = response.json()
+    assert result["scenario_inputs"] == {
+        "market_shock": -0.10,
+        "tech_shock": -0.15,
+        "rates_shock_bps": 100,
+        "ticker_shocks": {},
+    }
+    assert result["estimated_portfolio_return"] == pytest.approx(-0.205)
+    assert result["estimated_dollar_pnl"] == pytest.approx(-20_500)
+
+
+def test_stress_api_preserves_zero_and_optional_scenario_inputs() -> None:
+    response = TestClient(app).post(
+        "/portfolio/stress-test",
+        json={
+            "positions": [{"ticker": "SPY", "weight": 1.0}],
+            "market_shock": 0,
+            "tech_shock": None,
+            "rates_shock_bps": 0,
+            "portfolio_value": None,
+            "ticker_shocks": {"SPY": -0.20},
+        },
+    )
+
+    assert response.status_code == 200
+    result = response.json()
+    assert result["scenario_inputs"]["market_shock"] == 0
+    assert result["scenario_inputs"]["tech_shock"] is None
+    assert result["scenario_inputs"]["rates_shock_bps"] == 0
+    assert result["estimated_portfolio_return"] == pytest.approx(-0.20)
+    assert result["estimated_dollar_pnl"] is None
+
+
+@pytest.mark.parametrize(
     "shock", [None, [], {}, True, False, "", "invalid", "NaN", "Infinity", 1.01, -1.01]
 )
 def test_stress_api_rejects_invalid_ticker_shock_values(shock: object) -> None:
