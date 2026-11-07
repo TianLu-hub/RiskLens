@@ -1,6 +1,7 @@
 """Deployment probes run against an in-process API, never Yahoo or an LLM."""
 
 import argparse
+import json
 from unittest.mock import Mock
 
 import httpx
@@ -146,6 +147,105 @@ def test_cli_success_returns_zero(probe_api, monkeypatch, capsys):
     monkeypatch.setattr(httpx, "Client", lambda **kwargs: client)
     assert main([]) == 0
     assert "PASS stress" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize(
+    "path,value",
+    [
+        (("estimated_portfolio_return",), 0.16),
+        (("estimated_portfolio_return",), float("nan")),
+        (("estimated_dollar_pnl",), float("inf")),
+        (("estimated_dollar_pnl",), -1),
+        (("portfolio_value_before",), 1),
+        (("portfolio_value_after",), None),
+        (("scenario_name",), "private-upstream-diagnostic"),
+        (("historical_data_used",), True),
+        (("historical_data_used",), "false"),
+        (("scenario_inputs", "rates_shock_bps"), -100),
+        (("scenario_inputs", "market_shock"), -0.1),
+        (("scenario_inputs", "ticker_shocks"), {"TLT": -0.16}),
+        (("asset_contributions",), []),
+        (("asset_contributions", 0, "ticker"), "SPY"),
+        (("asset_contributions", 0, "weight"), True),
+        (("asset_contributions", 0, "portfolio_contribution"), 0.16),
+        (("asset_contributions", 0, "position_value_after"), 100_000),
+        (("asset_contributions", 0, "factor_shocks"), {"interest_rates": 0.16}),
+        (("factor_contributions",), []),
+        (("factor_contributions", 0, "factor"), "technology"),
+        (("factor_contributions", 0, "portfolio_contribution"), 0.16),
+        (("factor_contributions", 0, "estimated_dollar_pnl"), "-16000"),
+        (("assumptions",), []),
+    ],
+)
+def test_stress_probe_rejects_corrupted_results(probe_api, path, value):
+    api, provider = probe_api
+
+    def handler(request):
+        response = api.request(
+            request.method,
+            request.url.path,
+            headers=request.headers,
+            content=request.content,
+        )
+        if request.method == "POST":
+            payload = response.json()
+            target = payload
+            for key in path[:-1]:
+                target = target[key]
+            target[path[-1]] = value
+            # Explicit serialization also exercises non-finite provider JSON.
+            return httpx.Response(
+                200, content=json.dumps(payload), headers=response.headers
+            )
+        return httpx.Response(
+            response.status_code, content=response.content, headers=response.headers
+        )
+
+    with (
+        httpx.Client(
+            transport=httpx.MockTransport(handler), base_url="https://api.example"
+        ) as client,
+        pytest.raises(CheckFailed) as error,
+    ):
+        check_deployment(client, ORIGIN)
+    assert "private-upstream-diagnostic" not in str(error.value)
+    provider.get_adjusted_prices.assert_not_called()
+
+
+@pytest.mark.parametrize("change", ["source", "duration", "duplicate"])
+def test_stress_probe_rejects_incorrect_fallback_disclosure(probe_api, change):
+    api, _ = probe_api
+
+    def handler(request):
+        response = api.request(
+            request.method,
+            request.url.path,
+            headers=request.headers,
+            content=request.content,
+        )
+        if request.method == "POST":
+            payload = response.json()
+            duration = next(
+                a for a in payload["assumptions"] if a["id"] == "duration_TLT"
+            )
+            if change == "source":
+                duration["source_type"] = "user_input"
+            elif change == "duration":
+                duration["value"] = "15.0 years"
+            else:
+                payload["assumptions"].append(duration.copy())
+            return httpx.Response(200, json=payload, headers=response.headers)
+        return httpx.Response(
+            response.status_code, content=response.content, headers=response.headers
+        )
+
+    with (
+        httpx.Client(
+            transport=httpx.MockTransport(handler), base_url="https://api.example"
+        ) as client,
+        pytest.raises(CheckFailed, match="fallback disclosure"),
+    ):
+        check_deployment(client, ORIGIN)
 
 
 @pytest.mark.parametrize(

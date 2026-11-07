@@ -13,6 +13,7 @@ from pydantic import ValidationError
 from app.models.responses import HealthResponse, PortfolioAnalysisResponse
 from app.models.stress import StressTestResponse
 from app.models.var_backtest import VarBacktestRequest, VarBacktestResponse
+from scripts.stress_probe import SCENARIO_NAME, validate_stress_response
 from scripts.var_probe import validate_var_response
 
 
@@ -161,15 +162,21 @@ def check_deployment(
                 "positions": [{"ticker": "TLT", "weight": 1.0}],
                 "rates_shock_bps": 100,
                 "portfolio_value": 100000,
-                "scenario_name": "Deployment check (hypothetical)",
+                "scenario_name": SCENARIO_NAME,
             },
         )
         response.raise_for_status()
         require_cors(response, origin)
-        result = StressTestResponse.model_validate(response.json())
-        if result.historical_data_used or not result.asset_contributions:
-            raise CheckFailed("Stress response is missing its hypothetical result")
-        passed.append("PASS stress: typed hypothetical result returned")
+        result = StressTestResponse.model_validate_json(response.content, strict=True)
+        try:
+            validate_stress_response(result)
+        except ValueError as exc:
+            raise CheckFailed(
+                "Stress endpoint: fixed TLT result or fallback disclosure is inconsistent"
+            ) from exc
+        passed.append(
+            "PASS stress: fixed TLT result, attribution, and fallback verified"
+        )
 
         if include_market_data:
             stage = "market analysis"
