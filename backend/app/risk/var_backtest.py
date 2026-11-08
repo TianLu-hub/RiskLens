@@ -6,13 +6,13 @@ from datetime import UTC, datetime, timedelta
 
 import numpy as np
 import pandas as pd
-from pandas.api.types import is_bool_dtype, is_complex_dtype, is_numeric_dtype
 
 from app.data.market_data import (
     InsufficientHistoryError,
     MarketDataProvider,
     MarketDataUnavailableError,
 )
+from app.data.validation import validated_provider_prices
 from app.models.portfolio import WEIGHT_TOLERANCE
 from app.models.responses import DataQuality
 from app.models.var_backtest import (
@@ -83,7 +83,7 @@ def backtest_var_portfolio(
     end = datetime.now(UTC)
     start = end - timedelta(days=int(request.lookback_years * 365.25) + 10)
     history = provider.get_adjusted_prices(tickers, start, end)
-    prices = _validated_provider_prices(history.prices, tickers)
+    prices = validated_provider_prices(history.prices, tickers)
     if len(prices) < 2:
         raise InsufficientHistoryError(
             "At least two aligned prices are needed to calculate a daily return; "
@@ -170,50 +170,6 @@ def backtest_var_portfolio(
     )
 
 
-def _validated_provider_prices(
-    prices: pd.DataFrame, tickers: list[str]
-) -> pd.DataFrame:
-    """Reject malformed provider history without repairing or mutating its data."""
-
-    if not isinstance(prices, pd.DataFrame):
-        raise MarketDataUnavailableError(
-            "The market data provider returned invalid price history. Please try again."
-        )
-    if (
-        isinstance(prices.columns, pd.MultiIndex)
-        or not prices.columns.is_unique
-        or any(ticker not in prices.columns for ticker in tickers)
-    ):
-        raise MarketDataUnavailableError(
-            "The market data provider returned invalid price history: "
-            "requested ticker columns are missing or duplicated. Please try again."
-        )
-    if (
-        not isinstance(prices.index, pd.DatetimeIndex)
-        or prices.index.hasnans
-        or not prices.index.normalize().is_unique
-        or not prices.index.is_monotonic_increasing
-    ):
-        raise MarketDataUnavailableError(
-            "The market data provider returned invalid price history: "
-            "dates must be valid, unique, and sorted. Please try again."
-        )
-    selected = prices[tickers]
-    invalid_prices_message = (
-        "The market data provider returned invalid price history: "
-        "prices must be finite, numeric, and strictly positive. Please try again."
-    )
-    if any(
-        not is_numeric_dtype(dtype) or is_bool_dtype(dtype) or is_complex_dtype(dtype)
-        for dtype in selected.dtypes
-    ):
-        raise MarketDataUnavailableError(invalid_prices_message)
-    values = selected.to_numpy(dtype=float, na_value=np.nan)
-    if not np.isfinite(values).all() or (values <= 0).any():
-        raise MarketDataUnavailableError(invalid_prices_message)
-    return selected
-
-
 def _validate_inputs(
     returns: pd.DataFrame,
     weights: np.ndarray,
@@ -234,7 +190,9 @@ def _validate_inputs(
         not returns.index.normalize().is_unique
         or not returns.index.is_monotonic_increasing
     ):
-        raise ValueError("Daily return dates must be unique and sorted in increasing order")
+        raise ValueError(
+            "Daily return dates must be unique and sorted in increasing order"
+        )
     if returns.shape[1] == 0 or not returns.columns.is_unique:
         raise ValueError("Daily returns must contain unique asset columns")
     if not np.isfinite(returns.to_numpy(dtype=float)).all():
@@ -247,4 +205,6 @@ def _validate_inputs(
         or (weights > 1).any()
         or abs(float(weights.sum()) - 1.0) > WEIGHT_TOLERANCE
     ):
-        raise ValueError("Weights must match the asset columns, be long-only, and sum to 1.0")
+        raise ValueError(
+            "Weights must match the asset columns, be long-only, and sum to 1.0"
+        )

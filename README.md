@@ -262,6 +262,8 @@ The actual sample count is daily **returns**, not price rows or the requested nu
 
 Yahoo price validation distinguishes missing observations from invalid values. Zero, negative, infinite, nonnumeric, boolean, or complex closing prices are rejected before alignment and caching; affected APIs return `503` instead of computing from corrupt data. Missing observations still follow the disclosed gap-handling policy. This check does not detect every bad quote or verify prices against another provider.
 
+Allocation and VaR backtests also validate the aligned history at the provider boundary. Unsorted or duplicate daily dates, missing ticker columns, and non-finite or non-positive prices are rejected with `503`, without sorting, filling, or dropping observations inside the backtest. Empty or single-price histories return `422` for insufficient history. This protects training/test chronology when using a different data provider; it does not establish that the underlying data is point-in-time or free of selection bias.
+
 ## Tests
 
 ```bash

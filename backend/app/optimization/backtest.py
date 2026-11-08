@@ -8,7 +8,12 @@ from datetime import UTC, datetime, timedelta
 import numpy as np
 import pandas as pd
 
-from app.data.market_data import InsufficientHistoryError, MarketDataProvider
+from app.data.market_data import (
+    InsufficientHistoryError,
+    MarketDataProvider,
+    MarketDataUnavailableError,
+)
+from app.data.validation import validated_provider_prices
 from app.models.backtest import (
     BacktestFold,
     BacktestMetrics,
@@ -85,7 +90,18 @@ def backtest_portfolio(
     end = datetime.now(UTC)
     start = end - timedelta(days=int(request.lookback_years * 365.25) + 10)
     history = provider.get_adjusted_prices(tickers, start, end)
-    returns = daily_returns(history.prices[tickers])
+    prices = validated_provider_prices(history.prices, tickers)
+    if len(prices) < 2:
+        raise InsufficientHistoryError(
+            "At least two aligned prices are needed to calculate a daily return. "
+            "Select a longer lookback or shorter training window."
+        )
+    returns = daily_returns(prices)
+    if not np.isfinite(returns.to_numpy(dtype=float)).all():
+        raise MarketDataUnavailableError(
+            "The market data provider returned invalid price history: "
+            "prices cannot produce finite daily returns. Please try again."
+        )
     if len(returns) < request.training_days + request.rebalance_days:
         raise InsufficientHistoryError(
             f"Need at least {request.training_days + request.rebalance_days} aligned daily returns "

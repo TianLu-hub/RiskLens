@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from unittest.mock import Mock
 
 import numpy as np
 import pandas as pd
@@ -11,6 +12,7 @@ from fastapi.testclient import TestClient
 
 from app.data.market_data import (
     MarketDataProvider,
+    MarketDataUnavailableError,
     PriceHistory,
     YahooFinanceProvider,
     get_market_data_provider,
@@ -128,6 +130,110 @@ def test_invalid_configuration_rejected() -> None:
         "/portfolio/backtest", json=request().model_dump() | {"cost_bps": -1}
     )
     assert response.status_code == 422
+
+
+@pytest.mark.parametrize(
+    "problem",
+    [
+        "unsorted",
+        "duplicate_date",
+        "same_day",
+        "missing_date",
+        "numeric_index",
+        "missing_ticker",
+        "duplicate_ticker",
+        "missing_price",
+        "zero_price",
+        "negative_price",
+        "infinite_price",
+        "boolean_price",
+        "string_price",
+        "overflow_return",
+    ],
+)
+def test_malformed_history_is_rejected_before_returns_or_optimization(
+    monkeypatch, problem
+):
+    provider = Mock(spec=MarketDataProvider)
+    prices = (
+        BacktestProvider()
+        .get_adjusted_prices(
+            ["AAPL", "SPY"], datetime(2023, 1, 1), datetime(2026, 1, 1)
+        )
+        .prices
+    )
+    if problem == "unsorted":
+        prices = prices.iloc[::-1]
+    elif problem in {"duplicate_date", "same_day", "missing_date"}:
+        index = list(prices.index)
+        index[10] = (
+            pd.NaT
+            if problem == "missing_date"
+            else index[9] + pd.Timedelta(hours=1 if problem == "same_day" else 0)
+        )
+        prices.index = pd.DatetimeIndex(index)
+    elif problem == "numeric_index":
+        prices.index = pd.RangeIndex(len(prices))
+    elif problem == "missing_ticker":
+        prices = prices.drop(columns="SPY")
+    elif problem == "duplicate_ticker":
+        prices.columns = ["AAPL", "AAPL"]
+    elif problem == "boolean_price":
+        prices["AAPL"] = True
+    elif problem == "string_price":
+        prices["AAPL"] = "100"
+    elif problem == "overflow_return":
+        prices.iloc[9, 0] = 1e-300
+        prices.iloc[10, 0] = 1e300
+    else:
+        prices.iloc[10, 0] = {
+            "missing_price": np.nan,
+            "zero_price": 0,
+            "negative_price": -1,
+            "infinite_price": np.inf,
+        }[problem]
+    original = prices.copy(deep=True)
+    provider.get_adjusted_prices.return_value = PriceHistory(
+        prices=prices, source="Synthetic Test Data", warnings=[]
+    )
+    optimize = Mock(
+        side_effect=AssertionError("Invalid history must not reach optimization")
+    )
+    monkeypatch.setattr("app.optimization.backtest.optimize_weights", optimize)
+    if problem != "overflow_return":
+        monkeypatch.setattr(
+            "app.optimization.backtest.daily_returns",
+            Mock(
+                side_effect=AssertionError(
+                    "Validate history before calculating returns"
+                )
+            ),
+        )
+    with pytest.raises(MarketDataUnavailableError, match="invalid price history"):
+        backtest_portfolio(request(), provider)
+    monkeypatch.setitem(
+        app.dependency_overrides, get_market_data_provider, lambda: provider
+    )
+    with TestClient(app, raise_server_exceptions=False) as client:
+        response = client.post("/portfolio/backtest", json=request().model_dump())
+    assert response.status_code == 503
+    assert response.json()["detail"]["code"] == "MARKET_DATA_UNAVAILABLE"
+    optimize.assert_not_called()
+    pd.testing.assert_frame_equal(prices, original)
+
+
+@pytest.mark.parametrize("days", [0, 1])
+def test_empty_or_single_price_is_insufficient_history_not_server_error(
+    monkeypatch, days
+):
+    provider = BacktestProvider(days=days)
+    monkeypatch.setitem(
+        app.dependency_overrides, get_market_data_provider, lambda: provider
+    )
+    with TestClient(app, raise_server_exceptions=False) as client:
+        response = client.post("/portfolio/backtest", json=request().model_dump())
+    assert response.status_code == 422
+    assert response.json()["detail"]["code"] == "INSUFFICIENT_HISTORY"
 
 
 def test_unadjusted_price_fallback_is_disclosed(
