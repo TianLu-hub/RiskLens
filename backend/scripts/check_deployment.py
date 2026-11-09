@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import argparse
+import json
 import math
 import re
 from collections.abc import Sequence
+from datetime import UTC, datetime
 
 import httpx
 from pydantic import ValidationError
@@ -19,6 +21,17 @@ from scripts.var_probe import validate_var_response
 
 class CheckFailed(Exception):
     """An actionable deployment check failed."""
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        stage: str | None = None,
+        completed_messages: Sequence[str] = (),
+    ) -> None:
+        super().__init__(message)
+        self.stage = stage
+        self.completed_messages = tuple(completed_messages)
 
 
 def commit_revision(value: str) -> str:
@@ -225,15 +238,27 @@ def check_deployment(
                 f"PASS VaR/Kupiec: {result.test_observations} out-of-sample days, "
                 f"{result.breach_count} breaches; response contract is consistent"
             )
+    except CheckFailed as exc:
+        raise CheckFailed(str(exc), stage=stage, completed_messages=passed) from exc
     except httpx.HTTPStatusError as exc:
         # Do not echo response bodies: proxies may return sensitive diagnostic HTML.
-        raise CheckFailed(f"{stage}: HTTP {exc.response.status_code}") from exc
+        raise CheckFailed(
+            f"{stage}: HTTP {exc.response.status_code}",
+            stage=stage,
+            completed_messages=passed,
+        ) from exc
     except httpx.RequestError as exc:
         raise CheckFailed(
-            f"{stage}: connection/TLS/timeout failure; check API URL and service status"
+            f"{stage}: connection/TLS/timeout failure; check API URL and service status",
+            stage=stage,
+            completed_messages=passed,
         ) from exc
     except (ValidationError, ValueError) as exc:
-        raise CheckFailed(f"{stage}: response is not valid RiskLens JSON") from exc
+        raise CheckFailed(
+            f"{stage}: response is not valid RiskLens JSON",
+            stage=stage,
+            completed_messages=passed,
+        ) from exc
     return passed
 
 
@@ -242,6 +267,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--api-url", type=origin_url, default="http://127.0.0.1:8000")
     parser.add_argument("--origin", type=origin_url, default="http://localhost:3000")
     parser.add_argument("--timeout", type=positive_timeout, default=30.0)
+    parser.add_argument(
+        "--json",
+        action="store_true",
+        dest="json_output",
+        help="Emit one JSON report, including completed checks on failure",
+    )
     parser.add_argument(
         "--expected-revision",
         type=commit_revision,
@@ -258,6 +289,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         help="Also verify rolling VaR/Kupiec and its CORS route (may fetch Yahoo history)",
     )
     args = parser.parse_args(argv)
+    started_at = datetime.now(UTC)
+    error: dict[str, str | None] | None = None
     try:
         with httpx.Client(
             base_url=args.api_url, timeout=args.timeout, follow_redirects=False
@@ -270,11 +303,37 @@ def main(argv: Sequence[str] | None = None) -> int:
                 expected_revision=args.expected_revision,
             )
     except CheckFailed as exc:
-        print(f"FAIL {exc}")
-        return 1
-    for message in messages:
-        print(message)
-    return 0
+        messages = list(exc.completed_messages)
+        error = {"stage": exc.stage, "message": str(exc)}
+    if args.json_output:
+        # Only include validated CLI inputs and sanitized diagnostics, never
+        # response bodies, request headers, environment values, or exceptions.
+        print(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "status": "failed" if error else "passed",
+                    "started_at": started_at.isoformat(),
+                    "finished_at": datetime.now(UTC).isoformat(),
+                    "api_url": args.api_url,
+                    "origin": args.origin,
+                    "requested_checks": {
+                        "market_data": args.include_market_data,
+                        "var_backtest": args.include_var_backtest,
+                        "expected_revision": args.expected_revision,
+                    },
+                    "messages": messages,
+                    "error": error,
+                },
+                allow_nan=False,
+            )
+        )
+    elif error:
+        print(f"FAIL {error['message']}")
+    else:
+        for message in messages:
+            print(message)
+    return 1 if error else 0
 
 
 if __name__ == "__main__":

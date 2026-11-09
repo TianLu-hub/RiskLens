@@ -2,6 +2,7 @@
 
 import argparse
 import json
+from datetime import datetime, timedelta
 from unittest.mock import Mock
 
 import httpx
@@ -147,6 +148,141 @@ def test_cli_success_returns_zero(probe_api, monkeypatch, capsys):
     monkeypatch.setattr(httpx, "Client", lambda **kwargs: client)
     assert main([]) == 0
     assert "PASS stress" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("include_market_data", [False, True])
+def test_json_report_records_scope_and_utc_times(
+    probe_api, monkeypatch, capsys, include_market_data
+):
+    client, provider = probe_api
+    sha = "abcdef01" * 5
+    monkeypatch.setenv("RISKLENS_REVISION", sha)
+    monkeypatch.setattr(httpx, "Client", lambda **kwargs: client)
+    args = ["--json", "--expected-revision", sha.upper()]
+    if include_market_data:
+        args.append("--include-market-data")
+    assert main(args) == 0
+    captured = capsys.readouterr()
+    report = json.loads(captured.out)
+    assert captured.err == ""
+    assert report["schema_version"] == 1
+    assert report["status"] == "passed"
+    assert report["error"] is None
+    assert report["api_url"] == "http://127.0.0.1:8000"
+    assert report["origin"] == ORIGIN
+    assert report["requested_checks"] == {
+        "market_data": include_market_data,
+        "var_backtest": False,
+        "expected_revision": sha,
+    }
+    started = datetime.fromisoformat(report["started_at"])
+    finished = datetime.fromisoformat(report["finished_at"])
+    assert started.utcoffset() == finished.utcoffset() == timedelta(0)
+    assert started <= finished
+    assert report["messages"][0].startswith("PASS health")
+    assert any(m.startswith("PASS revision") for m in report["messages"])
+    assert report["messages"][-1].startswith(
+        "PASS analysis" if include_market_data else "SKIP market analysis"
+    )
+    assert provider.get_adjusted_prices.call_count == int(include_market_data)
+
+
+@pytest.mark.parametrize(
+    "stage,path,method,failure,completed",
+    [
+        ("health", "/health", "GET", "http", 0),
+        ("health", "/health", "GET", "timeout", 0),
+        ("CORS preflight", "/portfolio/stress-test", "OPTIONS", "cors", 1),
+        ("stress endpoint", "/portfolio/stress-test", "POST", "schema", 2),
+        ("stress endpoint", "/portfolio/stress-test", "POST", "result", 2),
+        ("market analysis", "/portfolio/analyze", "POST", "http", 3),
+        ("VaR backtest", "/portfolio/var-backtest", "POST", "http", 4),
+    ],
+)
+def test_json_failure_retains_progress_without_leaking_diagnostics(
+    probe_api, monkeypatch, capsys, stage, path, method, failure, completed
+):
+    api, _ = probe_api
+    private = "private-upstream-diagnostic-do-not-print"
+
+    def handler(request):
+        target = request.url.path == path and request.method == method
+        if target and failure == "http":
+            return httpx.Response(503, text=private, headers={"x-private": private})
+        if target and failure == "timeout":
+            raise httpx.ReadTimeout(private, request=request)
+        response = api.request(
+            request.method,
+            request.url.path,
+            headers=request.headers,
+            content=request.content,
+        )
+        if target:
+            if failure == "cors":
+                del response.headers["access-control-allow-origin"]
+            elif failure == "schema":
+                return httpx.Response(200, text=private, headers=response.headers)
+            elif failure == "result":
+                data = response.json()
+                data["scenario_name"] = private
+                return httpx.Response(200, json=data, headers=response.headers)
+        return httpx.Response(
+            response.status_code, headers=response.headers, content=response.content
+        )
+
+    client = httpx.Client(
+        transport=httpx.MockTransport(handler), base_url="https://api.example"
+    )
+    monkeypatch.setattr(httpx, "Client", lambda **kwargs: client)
+    assert (
+        main(
+            [
+                "--json",
+                "--api-url",
+                "https://api.example/",
+                "--include-market-data",
+                "--include-var-backtest",
+            ]
+        )
+        == 1
+    )
+    captured = capsys.readouterr()
+    assert private not in captured.out + captured.err
+    report = json.loads(captured.out)
+    assert report["status"] == "failed"
+    assert report["api_url"] == "https://api.example"
+    assert report["error"]["stage"] == stage
+    assert len(report["messages"]) == completed
+    assert report["requested_checks"] == {
+        "market_data": True,
+        "var_backtest": True,
+        "expected_revision": None,
+    }
+    assert all(message.startswith("PASS") for message in report["messages"])
+
+
+def test_json_revision_failure_does_not_claim_release_passed(
+    probe_api, monkeypatch, capsys
+):
+    client, provider = probe_api
+    monkeypatch.delenv("RISKLENS_REVISION", raising=False)
+    monkeypatch.setattr(httpx, "Client", lambda **kwargs: client)
+    assert main(["--json", "--expected-revision", "a" * 40]) == 1
+    report = json.loads(capsys.readouterr().out)
+    assert report["error"]["stage"] == "release revision"
+    assert len(report["messages"]) == 1
+    assert report["messages"][0].startswith("PASS health")
+    provider.get_adjusted_prices.assert_not_called()
+
+
+def test_json_invalid_arguments_keep_standard_usage_error(monkeypatch, capsys):
+    client = Mock()
+    monkeypatch.setattr(httpx, "Client", client)
+    with pytest.raises(SystemExit) as exc:
+        main(["--json", "--timeout", "0"])
+    assert exc.value.code == 2
+    assert capsys.readouterr().out == ""
+    client.assert_not_called()
 
 
 @pytest.mark.parametrize(
