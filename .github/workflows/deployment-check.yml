@@ -54,23 +54,16 @@ jobs:
           EXPECTED_REVISION: ${{ inputs.expected_revision }}
           INCLUDE_MARKET_DATA: ${{ inputs.include_market_data }}
           INCLUDE_VAR_BACKTEST: ${{ inputs.include_var_backtest }}
-        run: |
-          set -euo pipefail
-          args=(
-            --api-url https://balanced-intuition-production-6020.up.railway.app
-            --origin https://risklens-ai-portfolio-risk-terminal.tianlu923.chatgpt.site
-            --timeout 60
-          )
-          if [[ -n "$EXPECTED_REVISION" ]]; then
-            args+=(--expected-revision "$EXPECTED_REVISION")
-          fi
-          if [[ "$INCLUDE_MARKET_DATA" == "true" ]]; then
-            args+=(--include-market-data)
-          fi
-          if [[ "$INCLUDE_VAR_BACKTEST" == "true" ]]; then
-            args+=(--include-var-backtest)
-          fi
-          python -m scripts.check_deployment "${args[@]}" | tee "$RUNNER_TEMP/risklens-probe.txt"
+        run: bash scripts/probe_production.sh
+
+      - name: Save deployment report
+        if: ${{ always() && steps.probe.outputs.report_available == 'true' }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: risklens-api-check-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/risklens-probe.json
+          if-no-files-found: error
+          retention-days: 14
 
       - name: Summarize checks
         if: always()
@@ -85,11 +78,11 @@ jobs:
             printf 'Probe outcome: **%s**\n\n' "$PROBE_OUTCOME"
             printf 'Historical analysis requested: `%s`\n\n' "$INCLUDE_MARKET_DATA"
             printf 'VaR/Kupiec requested: `%s`\n\n' "$INCLUDE_VAR_BACKTEST"
-            echo '```text'
-            if [[ -f "$RUNNER_TEMP/risklens-probe.txt" ]]; then
-              cat "$RUNNER_TEMP/risklens-probe.txt"
+            echo '```json'
+            if [[ -s "$RUNNER_TEMP/risklens-probe.json" ]]; then
+              cat "$RUNNER_TEMP/risklens-probe.json"
             else
-              echo 'Probe did not run; inspect setup/install logs.'
+              echo 'No JSON report available; inspect setup/install or argument-validation logs.'
             fi
             echo '```'
             echo 'No deployment or AI calls. Optional revision matching checks reported metadata, not artifact authenticity. Passing checks do not verify numerical accuracy, data freshness, or browser UI.'

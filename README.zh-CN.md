@@ -229,6 +229,8 @@ pnpm dev
 
 在 GitHub 打开 **Actions → Production API check → Run workflow**，选择 `main` 后运行。默认检查线上 API 的健康状态、CORS 和假设压力测试响应。两个复选框可分别启用历史行情分析和 VaR/Kupiec 检查；默认均关闭，避免不必要的 Yahoo 请求。运行摘要会展示结果，失败时也会保留提示。此流程仅手动触发，不需要 API 密钥，也不会部署代码。检查通过**不代表** Railway 已运行最新 GitHub 提交。
 
+生成 JSON 报告的运行还会在 **Artifacts → risklens-api-check-RUN_ID-ATTEMPT** 中保存报告，保留 14 天，便于下载比较检查时间、范围和失败前的进度。检查失败时仍上传报告，工作流仍标记失败；安装或参数错误未生成报告时，不创建空文件产物。上传范围仅限经过脱敏的 `risklens-probe.json`，不包含服务器响应正文或环境文件。
+
 安装后端依赖后，在 `backend/` 目录运行：
 
 若要核对某个发布版本，请将后端 `RISKLENS_REVISION` 设置为**实际部署源码的完整 40 位提交 SHA**，再部署或重启该后端。`/health` 会通过 `revision` 返回版本；未设置或格式不合法时返回 `null`，不会直接暴露任意环境变量文本。在下方命令中加入 `--expected-revision 完整提交SHA`，或填写手动工作流的 **expected_revision**。版本缺失或不匹配时，会在压力测试与行情请求前失败；留空则保留原健康检查行为。这只是核对运维填写的版本信息，并非部署产物的真实性证明；不能只改变量、却不部署代码来让检查通过。
