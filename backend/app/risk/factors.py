@@ -12,6 +12,7 @@ from app.risk.metrics import TRADING_DAYS
 
 MARKET_BENCHMARK = "SPY"
 DEFAULT_ROLLING_WINDOW = 60
+MIN_MARKET_VARIANCE = 1e-18
 
 
 @dataclass(frozen=True)
@@ -40,7 +41,8 @@ def market_factor_regression(
 
     The intercept is annualized arithmetically as ``daily alpha * 252``.
     Rolling beta is the sample covariance divided by the sample market
-    variance over the disclosed trailing window.
+    variance over the disclosed trailing window. Windows with effectively zero
+    benchmark variance are omitted, not reported as zero or clipped betas.
     """
 
     if rolling_window < 2:
@@ -75,7 +77,7 @@ def market_factor_regression(
     market_excess = aligned["market"] - daily_risk_free_rate
     portfolio_excess = aligned["portfolio"] - daily_risk_free_rate
     market_variance = float(market_excess.var(ddof=1))
-    if not math.isfinite(market_variance) or market_variance <= 1e-18:
+    if not math.isfinite(market_variance) or market_variance <= MIN_MARKET_VARIANCE:
         return MarketFactorEstimate(
             available=False,
             alpha_annualized=None,
@@ -106,8 +108,13 @@ def market_factor_regression(
 
     rolling_covariance = portfolio_excess.rolling(rolling_window).cov(market_excess)
     rolling_variance = market_excess.rolling(rolling_window).var(ddof=1)
+    # Apply the same identification guard as full-sample OLS before division.
+    # Tiny finite denominators can otherwise produce huge, meaningless betas.
+    usable_variance = rolling_variance.where(
+        np.isfinite(rolling_variance) & (rolling_variance > MIN_MARKET_VARIANCE)
+    )
     rolling_beta = (
-        (rolling_covariance / rolling_variance)
+        (rolling_covariance / usable_variance)
         .replace([np.inf, -np.inf], np.nan)
         .dropna()
     )

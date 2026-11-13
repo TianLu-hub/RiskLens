@@ -93,7 +93,9 @@ class FactorExposureResult(BaseModel):
     rolling_beta: list[TimeSeriesPoint] = Field(default_factory=list)
     methodology: str = (
         "OLS on aligned daily portfolio and SPY excess returns; the daily intercept "
-        "is annualized by 252. Rolling beta uses a trailing 60-trading-day window."
+        "is annualized by 252. Rolling beta uses a trailing 60-trading-day window. "
+        "Windows with non-finite or effectively zero benchmark variance "
+        "(at most 1e-18 in daily return units squared) are omitted, not replaced by zero."
     )
     unavailable_reason: str | None = None
 

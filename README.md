@@ -290,6 +290,7 @@ Tests use deterministic synthetic price fixtures, with no Yahoo Finance or LLM d
 - Modeled close execution and flat basis-point costs omit spreads, slippage, market impact, taxes, and survivorship-bias correction.
 - Historical-style stress presets are simplified linear shocks, not exact event replays. Tech exposures and bond durations are disclosed fallback assumptions, not real-time holdings or measurements.
 - SPY is the only implemented market-factor proxy; SMB, HML, and momentum remain unavailable until validated factor data is integrated.
+- Rolling beta omits windows whose estimated benchmark variance is non-finite or at most `1e-18` (squared daily return fractions), using the same threshold as full-sample beta. Omitted windows mean the estimate is unavailable, not zero exposure. Valid windows resume when variance recovers; the full-sample estimate can remain available.
 - Yahoo Finance data can be delayed, revised, incomplete, or unavailable. The provider aligns dates, warns about gaps, and discloses when unadjusted closes replace adjusted closes.
 - Next: test execution-delay/slippage sensitivity, additional validated factors, and robustness across training windows and market regimes. Add persistence only if saved portfolios become necessary.
 
