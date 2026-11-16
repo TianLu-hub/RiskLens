@@ -99,6 +99,97 @@ def test_analyze_portfolio_response() -> None:
     assert len(payload["factor_exposure"]["rolling_beta"]) == 460
 
 
+@pytest.mark.parametrize(
+    "problem",
+    [
+        "duplicate_dates",
+        "unsorted",
+        "missing_date",
+        "numeric_dates",
+        "missing_ticker",
+        "duplicate_ticker",
+        "missing_price",
+        "zero_price",
+        "infinite_price",
+        "string_prices",
+        "overflow_return",
+        "network",
+    ],
+)
+def test_bad_optional_benchmark_preserves_core_analysis(monkeypatch, problem):
+    snapshots = []
+
+    class BrokenBenchmark(SyntheticProvider):
+        def get_adjusted_prices(self, tickers, start, end):
+            history = super().get_adjusted_prices(tickers, start, end)
+            if tickers != ["SPY"]:
+                return history
+            if problem == "network":
+                raise RuntimeError("private-upstream-diagnostic")
+            prices = history.prices.copy()
+            if problem in {"duplicate_dates", "missing_date"}:
+                dates = list(prices.index)
+                dates[10] = pd.NaT if problem == "missing_date" else dates[9]
+                prices.index = pd.DatetimeIndex(dates)
+            elif problem == "unsorted":
+                prices = prices.iloc[::-1]
+            elif problem == "numeric_dates":
+                prices.index = pd.RangeIndex(len(prices))
+            elif problem == "missing_ticker":
+                prices.columns = ["NOT_SPY"]
+            elif problem == "duplicate_ticker":
+                prices = pd.concat([prices, prices], axis=1)
+            elif problem == "string_prices":
+                prices["SPY"] = "100"
+            elif problem == "overflow_return":
+                prices.iloc[9, 0] = 1e-300
+                prices.iloc[10, 0] = 1e300
+            else:
+                prices.iloc[10, 0] = {
+                    "missing_price": np.nan,
+                    "zero_price": 0,
+                    "infinite_price": np.inf,
+                }[problem]
+            snapshots.append((prices, prices.copy(deep=True)))
+            return PriceHistory(
+                prices=prices, source="Synthetic Test Data", warnings=[]
+            )
+
+    payload = {"positions": [{"ticker": "AAPL", "weight": 1.0}]}
+    with TestClient(app, raise_server_exceptions=False) as client:
+        monkeypatch.setitem(
+            app.dependency_overrides, get_market_data_provider, SyntheticProvider
+        )
+        normal = client.post("/portfolio/analyze", json=payload)
+        assert normal.status_code == 200
+        assert normal.json()["factor_exposure"]["available"] is True
+        monkeypatch.setitem(
+            app.dependency_overrides, get_market_data_provider, BrokenBenchmark
+        )
+        response = client.post("/portfolio/analyze", json=payload)
+    assert response.status_code == 200
+    result = response.json()
+    factor = result.pop("factor_exposure")
+    expected_core = normal.json()
+    expected_core.pop("factor_exposure")
+    assert result == expected_core
+    assert factor["available"] is False
+    for field in (
+        "market_beta",
+        "alpha_annualized",
+        "r_squared",
+        "idiosyncratic_volatility",
+        "benchmark_source",
+    ):
+        assert factor[field] is None
+    assert factor["rolling_beta"] == []
+    assert factor["observations"] == 0
+    assert "core portfolio analytics remain valid" in factor["unavailable_reason"]
+    assert "private-upstream-diagnostic" not in response.text
+    for prices, original in snapshots:
+        pd.testing.assert_frame_equal(prices, original)
+
+
 def test_invalid_ticker_handling() -> None:
     app.dependency_overrides[get_market_data_provider] = lambda: InvalidProvider()
     client = TestClient(app)

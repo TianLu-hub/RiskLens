@@ -7,7 +7,8 @@ from datetime import UTC, datetime, timedelta
 import numpy as np
 import pandas as pd
 
-from app.data.market_data import MarketDataProvider
+from app.data.market_data import MarketDataProvider, MarketDataUnavailableError
+from app.data.validation import validated_provider_prices
 from app.models.portfolio import AnalyzeRequest
 from app.models.responses import (
     ConcentrationResult,
@@ -196,9 +197,16 @@ def _market_factor_exposure(
             benchmark_history = provider.get_adjusted_prices(
                 [MARKET_BENCHMARK], start, end
             )
-            benchmark_returns = daily_returns(
-                benchmark_history.prices[[MARKET_BENCHMARK]]
-            )[MARKET_BENCHMARK]
+            # The optional benchmark must not break otherwise valid core
+            # analytics or silently fit beta to malformed provider history.
+            benchmark_prices = validated_provider_prices(
+                benchmark_history.prices, [MARKET_BENCHMARK]
+            )
+            benchmark_returns = daily_returns(benchmark_prices)[MARKET_BENCHMARK]
+            if not np.isfinite(benchmark_returns.to_numpy(dtype=float)).all():
+                raise MarketDataUnavailableError(
+                    "SPY benchmark prices cannot produce finite daily returns."
+                )
             benchmark_source = benchmark_history.source
         except Exception:
             unavailable = MarketFactorEstimate(
