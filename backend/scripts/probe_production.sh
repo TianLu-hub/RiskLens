@@ -9,7 +9,7 @@ trap 'if [[ -s "$report" ]]; then printf "report_available=true\n" >> "$GITHUB_O
 
 args=(
   --json
-  --api-url https://balanced-intuition-production-6020.up.railway.app
+  --api-url https://risklens-api-free.onrender.com
   --origin https://risklens-ai-portfolio-risk-terminal.tianlu923.chatgpt.site
   --timeout 60
 )

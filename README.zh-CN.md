@@ -4,7 +4,7 @@
 
 [English](README.md) · **简体中文**
 
-[在线演示](https://risklens-ai-portfolio-risk-terminal.tianlu923.chatgpt.site/) · [后端健康检查](https://balanced-intuition-production-6020.up.railway.app/health)
+[在线演示](https://risklens-ai-portfolio-risk-terminal.tianlu923.chatgpt.site/) · [后端健康检查](https://risklens-api-free.onrender.com/health)
 
 RiskLens 是面向股票与 ETF 投资组合的全栈风险分析项目。用户输入股票代码和权重后，可以查看历史风险指标、运行明确标注为假设性的压力测试、比较受约束的优化权重，并通过按时间顺序滚动的样本外回测检验方法。项目用于量化金融学习与展示，**不是交易系统，也不提供个性化投资建议**。
 
@@ -223,19 +223,21 @@ pnpm dev
 
 响应中的 `kupiec_test` 包含似然比统计量 `statistic`、`p_value`、自由度、固定显著性水平、后端判定 `reject_null`、名义／观测突破概率、样本／突破次数以及 `warning_codes`。所有数值使用与图表和明细表相同的样本外突破标记。旧后端若未提供此字段，界面显示检验不可用，不生成替代数值。
 
-当前前端部署在 OpenAI Sites，FastAPI 后端部署在 Railway。换平台部署时，前端 `NEXT_PUBLIC_API_URL` 应填**公开的 HTTPS 后端地址**，不可填 localhost；后端 `CORS_ORIGINS` 应填准确的前端来源。若启用可选 LLM，`OPENAI_API_KEY` 只能配置在后端。本版本没有用户账户和云端保存组合。
+当前前端部署在 OpenAI Sites，FastAPI 后端部署目标为 Render Free，地址是 `https://risklens-api-free.onrender.com`；顶部健康检查链接可检查当前可用状态。换平台部署时，前端 `NEXT_PUBLIC_API_URL` 应填**公开的 HTTPS 后端地址**，不可填 localhost；后端 `CORS_ORIGINS` 应填准确的前端来源。若启用可选 LLM，`OPENAI_API_KEY` 只能配置在后端。本版本没有用户账户和云端保存组合。
 
-### 可选：Render 免费后端
+### Render 免费后端
 
 仓库中的 [`render.yaml`](render.yaml) 配置一个免费 Docker Web Service，复用 `backend/Dockerfile`，以 `/health` 检查健康状态，并允许现有 Site 来源跨域访问。`AI_PROVIDER=deterministic` 不调用付费 LLM；无需 API 密钥、数据库或磁盘。自动部署默认关闭，后续后端改动需手动部署。
 
-在 Render 从此仓库创建 Blueprint，确认套餐为 **Free** 后部署。部署后复制 Render 实际分配的 HTTPS 地址，不要根据服务名称猜域名。先验证 `/health`，再用该地址运行部署检查工具。通过后才替换前端 `NEXT_PUBLIC_API_URL`，重新构建发布前端，并更新 `backend/scripts/probe_production.sh` 中的 API 地址；替换前，该检查仍指向 Railway。
+现有服务通过 Render 的 **New → Web Service → Public Git Repository** 创建，仓库为 `https://github.com/TianLu-hub/RiskLens`，分支为 `main`，使用 Docker，根目录为 `backend`，套餐选择 **Free**。健康检查路径填 `/health`，两个环境变量使用 `render.yaml` 中的值，并关闭自动部署。后续后端发布使用 **Manual Deploy → Deploy latest commit**。新建服务也可从此仓库创建 Blueprint；更新现有服务不需要再创建第二个服务。
+
+若替换部署，复制 Render 实际分配的 HTTPS 地址，验证 `/health` 并运行部署检查。通过后替换前端 `NEXT_PUBLIC_API_URL`，重新构建发布前端，再更新 `backend/scripts/probe_production.sh` 中的目标地址。配置了网址或 GitHub 推送成功，不代表部署已健康运行。
 
 免费服务空闲 15 分钟后休眠，再次访问可能需要约一分钟唤醒。重启会清空内存缓存，Yahoo 仍可能限流。免费托管有月度用量限制，适合个人项目演示，不保证持续可用。参见 Render 的 [Blueprint 说明](https://render.com/docs/blueprint-spec)、[子目录路径规则](https://render.com/docs/monorepo-support)与[免费服务限制](https://render.com/docs/free)。
 
 ### 上线后检查
 
-在 GitHub 打开 **Actions → Production API check → Run workflow**，选择 `main` 后运行。默认检查线上 API 的健康状态、CORS 和假设压力测试响应。两个复选框可分别启用历史行情分析和 VaR/Kupiec 检查；默认均关闭，避免不必要的 Yahoo 请求。运行摘要会展示结果，失败时也会保留提示。此流程仅手动触发，不需要 API 密钥，也不会部署代码。检查通过**不代表** Railway 已运行最新 GitHub 提交。
+在 GitHub 打开 **Actions → Production API check → Run workflow**，选择 `main` 后运行。默认检查线上 API 的健康状态、CORS 和假设压力测试响应。两个复选框可分别启用历史行情分析和 VaR/Kupiec 检查；默认均关闭，避免不必要的 Yahoo 请求。运行摘要会展示结果，失败时也会保留提示。此流程仅手动触发，不需要 API 密钥，也不会部署代码。检查通过**不代表** Render 已运行最新 GitHub 提交。
 
 生成 JSON 报告的运行还会在 **Artifacts → risklens-api-check-RUN_ID-ATTEMPT** 中保存报告，保留 14 天，便于下载比较检查时间、范围和失败前的进度。检查失败时仍上传报告，工作流仍标记失败；安装或参数错误未生成报告时，不创建空文件产物。上传范围仅限经过脱敏的 `risklens-probe.json`，不包含服务器响应正文或环境文件。
 
@@ -249,7 +251,7 @@ python -m scripts.check_deployment
 
 # 检查线上 API、历史行情分析和滚动 VaR/Kupiec 验证
 python -m scripts.check_deployment \
-  --api-url https://balanced-intuition-production-6020.up.railway.app \
+  --api-url https://risklens-api-free.onrender.com \
   --origin https://risklens-ai-portfolio-risk-terminal.tianlu923.chatgpt.site \
   --include-market-data --include-var-backtest --timeout 60
 ```

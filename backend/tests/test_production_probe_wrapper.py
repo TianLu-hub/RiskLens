@@ -62,7 +62,7 @@ def test_wrapper_preserves_probe_exit_and_only_marks_nonempty_reports(
     assert "--include-var-backtest" not in args
     assert "--expected-revision" not in args
     assert args[args.index("--api-url") + 1] == (
-        "https://balanced-intuition-production-6020.up.railway.app"
+        "https://risklens-api-free.onrender.com"
     )
     report = (directory / "risklens-probe.json").read_text()
     if exit_code == 2:
