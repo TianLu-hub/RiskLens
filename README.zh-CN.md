@@ -225,6 +225,14 @@ pnpm dev
 
 当前前端部署在 OpenAI Sites，FastAPI 后端部署在 Railway。换平台部署时，前端 `NEXT_PUBLIC_API_URL` 应填**公开的 HTTPS 后端地址**，不可填 localhost；后端 `CORS_ORIGINS` 应填准确的前端来源。若启用可选 LLM，`OPENAI_API_KEY` 只能配置在后端。本版本没有用户账户和云端保存组合。
 
+### 可选：Render 免费后端
+
+仓库中的 [`render.yaml`](render.yaml) 配置一个免费 Docker Web Service，复用 `backend/Dockerfile`，以 `/health` 检查健康状态，并允许现有 Site 来源跨域访问。`AI_PROVIDER=deterministic` 不调用付费 LLM；无需 API 密钥、数据库或磁盘。自动部署默认关闭，后续后端改动需手动部署。
+
+在 Render 从此仓库创建 Blueprint，确认套餐为 **Free** 后部署。部署后复制 Render 实际分配的 HTTPS 地址，不要根据服务名称猜域名。先验证 `/health`，再用该地址运行部署检查工具。通过后才替换前端 `NEXT_PUBLIC_API_URL`，重新构建发布前端，并更新 `backend/scripts/probe_production.sh` 中的 API 地址；替换前，该检查仍指向 Railway。
+
+免费服务空闲 15 分钟后休眠，再次访问可能需要约一分钟唤醒。重启会清空内存缓存，Yahoo 仍可能限流。免费托管有月度用量限制，适合个人项目演示，不保证持续可用。参见 Render 的 [Blueprint 说明](https://render.com/docs/blueprint-spec)、[子目录路径规则](https://render.com/docs/monorepo-support)与[免费服务限制](https://render.com/docs/free)。
+
 ### 上线后检查
 
 在 GitHub 打开 **Actions → Production API check → Run workflow**，选择 `main` 后运行。默认检查线上 API 的健康状态、CORS 和假设压力测试响应。两个复选框可分别启用历史行情分析和 VaR/Kupiec 检查；默认均关闭，避免不必要的 Yahoo 请求。运行摘要会展示结果，失败时也会保留提示。此流程仅手动触发，不需要 API 密钥，也不会部署代码。检查通过**不代表** Railway 已运行最新 GitHub 提交。

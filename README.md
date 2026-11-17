@@ -225,6 +225,14 @@ The response includes `kupiec_test`: the likelihood-ratio `statistic`, `p_value`
 
 The frontend is deployed as an OpenAI Site and the FastAPI backend on Railway. For another deployment, set frontend `NEXT_PUBLIC_API_URL` to the backend's **public HTTPS origin**, never localhost; set backend `CORS_ORIGINS` to the exact frontend origin. Keep any optional `OPENAI_API_KEY` on the backend only. Saved accounts and portfolios are not part of this release.
 
+### Optional free backend on Render
+
+The repository's [`render.yaml`](render.yaml) defines one free Docker web service using `backend/Dockerfile`, a `/health` check, and the existing Site origin for CORS. `AI_PROVIDER=deterministic` avoids paid LLM calls; no API key, database, or disk is needed. Automatic deploys are off; deploy later backend changes manually.
+
+In Render, create a Blueprint from this repository and review the **Free** plan before deploying. Copy the actual HTTPS service URL from Render after deployment; the service name is not proof that a particular URL is available. Verify `/health` and run the deployment checker against that URL. Only then replace the frontend's `NEXT_PUBLIC_API_URL`, rebuild/publish the frontend, and update the API URL in `backend/scripts/probe_production.sh`. The current probe still targets Railway until that change is made.
+
+Free services sleep after 15 idle minutes and may take about a minute to wake. Memory caches reset on restart; Yahoo can still rate-limit requests. Free hosting has monthly usage limits and is intended for hobby/demo use, not guaranteed availability. See Render's [Blueprint reference](https://render.com/docs/blueprint-spec), [monorepo paths](https://render.com/docs/monorepo-support), and [free service limits](https://render.com/docs/free).
+
 ### Check a deployment
 
 On GitHub, open **Actions → Production API check → Run workflow**, select `main`, and run the check. The default checks the published API's health, CORS, and hypothetical stress response. The two optional checkboxes independently enable historical analysis and rolling VaR/Kupiec; both are off by default to avoid unnecessary Yahoo requests. Results appear in the run summary, including failures. This is manual only, requires no API secrets, and does not deploy code. A green result does **not** prove that the latest GitHub commit is running on Railway.

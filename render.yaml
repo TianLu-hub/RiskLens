@@ -1,0 +1,17 @@
+# Docker paths are relative to rootDir, per Render's monorepo configuration.
+services:
+  - type: web
+    name: risklens-api-free
+    runtime: docker
+    plan: free
+    branch: main
+    rootDir: backend
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /health
+    autoDeployTrigger: "off"
+    envVars:
+      - key: AI_PROVIDER
+        value: deterministic
+      - key: CORS_ORIGINS
+        value: https://risklens-ai-portfolio-risk-terminal.tianlu923.chatgpt.site
