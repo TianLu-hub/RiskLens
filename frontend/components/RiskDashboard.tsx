@@ -6,7 +6,6 @@ import {
   Activity,
   AlertTriangle,
   BrainCircuit,
-  Info,
   ChevronDown,
   ShieldCheck,
 } from 'lucide-react';
@@ -102,9 +101,6 @@ export function RiskDashboard() {
           setLookbackYears(saved.lookbackYears);
           setRiskFreeRate(saved.riskFreeRate);
           setPreset('Custom');
-          setStorageNotice(
-            'Saved portfolio restored on this device. Analyze it to load historical results.',
-          );
         } else {
           setStorageNotice(
             'Saved portfolio could not be restored. The default portfolio is shown.',
@@ -372,43 +368,6 @@ export function RiskDashboard() {
                 : storageNotice && t(storageNotice)}
             </output>
           )}
-          {mode === 'snapshot' &&
-            (activeSection === 'overview' ||
-              activeSection === 'factor-exposure' ||
-              activeSection === 'risk-officer') && (
-              <div className="mb-3 flex items-start gap-2 border border-amber-300/25 bg-amber-300/5 px-3 py-2.5 text-xs leading-5 text-amber-100">
-                <Info
-                  className="mt-0.5 size-4 shrink-0 text-amber-300"
-                  aria-hidden="true"
-                />
-                <p>
-                  <span className="font-semibold">{t('Demo data.')}</span>{' '}
-                  {t(
-                    'The charts below use a fixed synthetic example. Select a portfolio and click Analyze portfolio to load historical prices.',
-                  )}
-                </p>
-              </div>
-            )}
-          {inputsDirty && activeSection !== 'var-backtest' && (
-            <output className="mb-3 flex items-start gap-2 border border-primary/30 bg-primary/5 px-3 py-2.5 text-xs leading-5 text-foreground">
-              <Info
-                className="mt-0.5 size-4 shrink-0 text-primary"
-                aria-hidden="true"
-              />
-              <p>
-                <span className="font-semibold">
-                  {t('Inputs changed — analysis needs updating.')}
-                </span>{' '}
-                {t('The risk charts still show')}{' '}
-                {mode === 'snapshot'
-                  ? t('the demo portfolio')
-                  : t('the last analyzed portfolio')}
-                {t(
-                  '. Click Analyze portfolio to refresh them. Stress testing, optimization, and backtesting use your current inputs.',
-                )}
-              </p>
-            </output>
-          )}
           {error && activeSection !== 'var-backtest' && (
             <Alert variant="destructive" className="mb-3 rounded-sm">
               <AlertTriangle />
@@ -424,6 +383,8 @@ export function RiskDashboard() {
 
           <div hidden={activeSection !== 'overview'}>
             <DataProvenance
+              compact
+              needsUpdate={inputsDirty}
               quality={analysis.data_quality}
               demo={mode === 'snapshot'}
             />
@@ -464,6 +425,8 @@ export function RiskDashboard() {
           </div>
           <div hidden={activeSection !== 'factor-exposure'}>
             <DataProvenance
+              compact
+              needsUpdate={inputsDirty}
               quality={analysis.data_quality}
               demo={mode === 'snapshot'}
             />
@@ -479,6 +442,8 @@ export function RiskDashboard() {
           </div>
           <div hidden={activeSection !== 'risk-officer'}>
             <DataProvenance
+              compact
+              needsUpdate={inputsDirty}
               quality={analysis.data_quality}
               demo={mode === 'snapshot'}
             />

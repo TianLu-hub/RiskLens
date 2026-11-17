@@ -12,15 +12,41 @@ export function DataProvenance({
   quality,
   demo = false,
   context = 'portfolio',
+  compact = false,
+  needsUpdate = false,
 }: {
   quality: DataQuality;
   demo?: boolean;
   context?: 'portfolio' | 'optimization' | 'backtest';
+  compact?: boolean;
+  needsUpdate?: boolean;
 }) {
   const { locale, t } = useLanguage();
   const c = provenanceCopy[locale];
   const view = provenanceView(quality, demo);
   const meta = view.metadata;
+  if (compact) {
+    return (
+      <details className="mb-3 text-xs leading-5">
+        <summary className="w-fit cursor-pointer rounded-sm text-muted-foreground focus-visible:outline-2 focus-visible:outline-primary">
+          <span className={view.synthetic ? 'text-amber-200' : 'text-primary'}>
+            {view.synthetic ? c.demo : `${c.historical} · ${view.asOf}`}
+          </span>
+          {needsUpdate && (
+            <span className="ml-2 text-primary">
+              · {locale === 'zh' ? '待重新分析' : 'Analysis needs updating'}
+            </span>
+          )}
+          <span className="ml-3 underline decoration-dotted underline-offset-4">
+            {locale === 'zh' ? '数据详情' : 'Data details'}
+          </span>
+        </summary>
+        <div className="mt-2">
+          <DataProvenance quality={quality} demo={demo} context={context} />
+        </div>
+      </details>
+    );
+  }
   const cacheText =
     view.cache === 'hit'
       ? c.hit
